@@ -3,6 +3,11 @@ import { useState } from 'react'
 import { api, post } from '../lib/api'
 import type { ImportPackage, Instruction, ValidationResult } from '../lib/types'
 
+interface PackagePreview {
+  total_lines: number
+  messages: { when: string; sender: string; text: string; is_media: boolean }[]
+}
+
 export default function ImportAssistant(): JSX.Element {
   const { data: packages } = useQuery({
     queryKey: ['packages'],
@@ -12,6 +17,7 @@ export default function ImportAssistant(): JSX.Element {
   const [packageId, setPackageId] = useState<number | ''>('')
   const [result, setResult] = useState<ValidationResult | null>(null)
   const [instructions, setInstructions] = useState<Instruction[] | null>(null)
+  const [preview, setPreview] = useState<PackagePreview | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const validate = async () => {
@@ -34,6 +40,15 @@ export default function ImportAssistant(): JSX.Element {
     }
   }
 
+  const openPreview = async () => {
+    setError(null)
+    try {
+      setPreview(await api<PackagePreview>(`/api/import/${packageId}/preview`))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'preview failed')
+    }
+  }
+
   const pkg = packages?.find((p) => p.id === packageId)
 
   return (
@@ -44,7 +59,7 @@ export default function ImportAssistant(): JSX.Element {
         <div className="flex flex-wrap items-end gap-2">
           <div>
             <label className="block text-xs text-slate-400">Migration package</label>
-            <select value={packageId} onChange={(e) => { setPackageId(Number(e.target.value)); setResult(null); setInstructions(null) }}
+            <select value={packageId} onChange={(e) => { setPackageId(Number(e.target.value)); setResult(null); setInstructions(null); setPreview(null) }}
               className="rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm">
               <option value="">Select package…</option>
               {packages?.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -52,6 +67,7 @@ export default function ImportAssistant(): JSX.Element {
           </div>
           <button onClick={validate} className="rounded-md bg-slate-700 px-3 py-2 text-sm hover:bg-slate-600">Validate</button>
           <button onClick={getInstructions} className="rounded-md bg-emerald-600 px-3 py-2 text-sm hover:bg-emerald-500">Instructions</button>
+          <button onClick={openPreview} className="rounded-md border border-sky-600 px-3 py-2 text-sm text-sky-300 hover:bg-sky-600/20">Preview</button>
         </div>
         {error && <p className="text-sm text-rose-400">{error}</p>}
       </div>
@@ -92,6 +108,33 @@ export default function ImportAssistant(): JSX.Element {
             </div>
           ))}
         </section>
+      )}
+
+      {preview && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/60 p-4" onClick={() => setPreview(null)}>
+          <div className="flex max-h-[80vh] w-full max-w-2xl flex-col rounded-xl border border-slate-800 bg-slate-900" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-slate-800 p-4">
+              <span className="font-medium">
+                Package preview · first {preview.messages.length} of {preview.total_lines} lines
+              </span>
+              <button onClick={() => setPreview(null)} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+            <div className="space-y-3 overflow-y-auto p-4 text-sm">
+              {preview.messages.length === 0 && <p className="text-slate-400">No messages in this package.</p>}
+              {preview.messages.map((m, idx) => (
+                <div key={idx} className="rounded-md border border-slate-800 bg-slate-950 p-3">
+                  <div className="flex justify-between text-xs text-slate-500">
+                    <span className="font-medium text-slate-300">{m.sender || 'Unknown'}</span>
+                    <span>{m.when}</span>
+                  </div>
+                  <p className={`mt-1 whitespace-pre-wrap ${m.is_media ? 'text-sky-300' : ''}`}>
+                    {m.is_media ? '📎 ' : ''}{m.text}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

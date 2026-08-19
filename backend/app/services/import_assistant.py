@@ -144,3 +144,30 @@ def write_instructions(package_dir: Path) -> Path:
     out = package_dir / "INSTRUCTIONS.md"
     out.write_text("\n".join(text_lines), encoding="utf-8")
     return out
+
+
+def preview_package(package_dir: Path, limit: int = 100) -> dict[str, Any]:
+    """Preview the first ``limit`` messages of a package's ``_chat.txt``.
+
+    Returns {total_lines, messages: [{when, sender, text, is_media}]}.
+    """
+    chat_txt = package_dir / "_chat.txt"
+    messages: list[dict[str, Any]] = []
+    total = 0
+    if chat_txt.exists():
+        for line in chat_txt.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            total += 1
+            m = LINE_RE.match(line)
+            if m:
+                when, sender, text = m.groups()
+                is_media = text.startswith("<Attached:")
+                messages.append(
+                    {"when": when, "sender": sender, "text": text, "is_media": is_media}
+                )
+            elif len(messages) < limit:
+                messages.append({"when": "", "sender": "", "text": line, "is_media": False})
+            if len(messages) >= limit:
+                break
+    return {"total_lines": total, "messages": messages}

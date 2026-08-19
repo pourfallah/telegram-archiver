@@ -185,10 +185,14 @@ export default function Exports(): JSX.Element {
               {preview.messages.map((m) => (
                 <div key={m.id} className="rounded-md border border-slate-800 bg-slate-950 p-3">
                   <div className="flex justify-between text-xs text-slate-500">
-                    <span className="font-medium text-slate-300">{m.sender}</span>
-                    <span>{m.date}</span>
+                    <span className="font-medium text-slate-300">{m.sender ?? 'Unknown'}</span>
+                    <span>{m.date ?? ''}</span>
                   </div>
-                  <p className="mt-1 whitespace-pre-wrap">{m.text || <span className="text-slate-600">(media only: {m.media?.join(', ')})</span>}</p>
+                  {m.text ? (
+                    <p className="mt-1 whitespace-pre-wrap">{m.text}</p>
+                  ) : (
+                    <p className="mt-1 text-slate-400">(media only: {Object.keys(m.media || {}).join(', ') || 'yes'})</p>
+                  )}
                 </div>
               ))}
             </div>

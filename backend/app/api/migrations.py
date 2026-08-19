@@ -230,3 +230,16 @@ async def package_instructions(
         instructions=instructions,
         instructions_path=str(instructions_path),
     )
+
+
+@router.get("/api/import/{package_id}/preview")
+async def package_preview(
+    package_id: int,
+    db: DbSession,
+    user: Annotated[UserAccount, Depends(get_current_user)],
+    limit: int = 100,
+):
+    """Preview the first ``limit`` messages of a package's ``_chat.txt``."""
+    limit = max(1, min(limit, 500))
+    pkg = await _owned_package(package_id, db)
+    return import_assistant.preview_package(Path(pkg.package_path), limit)
