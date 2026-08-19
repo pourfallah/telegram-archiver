@@ -7,11 +7,34 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added (planned)
 
-- Phase 3: Chat export engine (checkpointed, pause/resume/cancel, JSON/HTML/SQLite writers).
 - Phase 4: Media downloader (concurrency-capped, hashed, retryable).
 - Phase 5: WhatsApp-compatible migration builder, test package builder, import assistant.
 - Phase 6: React dashboard.
 - Phase 7: Full test suite + release.
+
+## [0.3.0] - 2026-08-19
+
+### Added — Phase 3 (export engine)
+
+- Chat export engine (`services/export_engine.py`): paced, checkpointed iteration over
+  chat history with flood-wait backoff and bounded retries.
+- **Durable checkpointing:** message ledger and offset/count checkpoint commit in the
+  same transaction, so a crash or worker loss never re-processes committed messages on
+  resume (crash-resume is exact, no duplicates).
+- Live progress metrics: messages processed, total estimate, speed (EMA), ETA, percent
+  when the total is known. Cooperative pause / resume / cancel.
+- Three writers (`services/export_writers.py`): streaming `messages.jsonl` workfile,
+  canonical oldest-first `messages.json`, incremental `database.sqlite`, and paged
+  browseable HTML (`index.html` + `pages/`).
+- Media ledger: `MediaFile` rows (type, MIME, size, filename) queued per message for the
+  Phase 4 downloader.
+- Export APIs: chat search + export creation (account-scoped), list/detail, progress,
+  pause/resume/cancel (terminal-state guards), authenticated file listing + download with
+  path-traversal protection, and purge-on-delete.
+- Celery `export.run` task + in-process `InlineTaskRunner` for hermetic tests.
+- Test suite: export-engine round-trip, crash-resume-no-duplicates, pause/resume, cancel,
+  flood-wait recovery, speed/ETA math, and full exports API coverage — **60 tests green**
+  on SQLite (PostgreSQL via `TEST_DATABASE_URL`).
 
 ## [0.2.0] - 2026-08-19
 

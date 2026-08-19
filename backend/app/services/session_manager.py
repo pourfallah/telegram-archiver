@@ -95,6 +95,7 @@ class SessionManager:
         self._factory: ClientFactory = client_factory or default_client_factory
         self._flows: dict[int, HeldLogin] = {}
         self._pool: dict[int, PoolEntry] = {}
+        self._account_locks: dict[int, asyncio.Lock] = {}
         self._lock = asyncio.Lock()
 
     # ---------------------------------------------------------------- login
@@ -222,6 +223,28 @@ class SessionManager:
 
     # ------------------------------------------------------------ pooling
 
+    async def acquire_client(self, account: TelegramSession):
+        """Acquire a connected client for an account, serialized per account.
+
+        Returns an awaitable context manager yielding the client — only one
+        task can hold a given account's client at a time, so parallel exports
+        from the same account cannot interleave requests.
+        """
+        async with self._lock:
+            lock = self._account_locks.setdefault(account.id, asyncio.Lock())
+        await lock.acquire()
+
+        async def _release() -> None:
+            lock.release()
+            self._touch(account.id)
+
+        try:
+            client = await self._acquire(account)
+        except BaseException:
+            lock.release()
+            raise
+        return client, _release
+
     async def _acquire(self, account: TelegramSession) -> TelegramClient:
         """Return a connected client for an authenticated account."""
         async with self._lock:
@@ -265,6 +288,7 @@ class SessionManager:
     async def drop(self, account_id: int) -> None:
         """Forget a client: called on account deletion or logout."""
         self._flows.pop(account_id, None)
+        self._account_locks.pop(account_id, None)
         entry = self._pool.pop(account_id, None)
         if entry is not None:
             await self._disconnect_later(entry.client)

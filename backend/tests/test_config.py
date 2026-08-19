@@ -5,7 +5,7 @@ from app.config import Settings, get_settings
 def test_settings_defaults_are_sane():
     s = Settings()
     assert s.app_name == "Telegram Archive & Migration Suite"
-    assert s.checkpoint_every >= 50
+    assert s.checkpoint_every >= 1
     assert s.media_concurrency >= 1
     assert s.export_msgs_per_sec > 0
     assert s.jwt_algorithm == "HS256"

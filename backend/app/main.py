@@ -17,6 +17,8 @@ from app.database import async_session_factory
 from app.models import UserAccount
 from app.services.rate_limit import FixedWindowLimiter
 from app.services.session_manager import SessionManager
+from app.services.task_runner import CeleryTaskRunner
+from app.workers.celery_app import celery_app
 
 logger = logging.getLogger("app")
 
@@ -64,6 +66,7 @@ async def lifespan(app: FastAPI):
     app.state.session_manager = SessionManager(settings, redis=redis_client)
     app.state.login_limiter = FixedWindowLimiter(redis_client, 10, 300, "login")
     app.state.code_limiter = FixedWindowLimiter(redis_client, 10, 300, "code")
+    app.state.task_runner = CeleryTaskRunner(celery_app)
 
     if not settings.session_encryption_key:
         logger.warning(
