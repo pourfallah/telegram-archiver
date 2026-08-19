@@ -23,7 +23,10 @@ class MigrationPublic(BaseModel):
 
 
 class TestPackageCreate(BaseModel):
-    count: int = Field(default=100, ge=10, le=1000)
+    count: int = Field(default=100, ge=1, le=1000)
+    # When export_id is given, build the test package from the first `count`
+    # real messages of that export instead of synthetic sample data.
+    export_id: int | None = None
 
 
 class ImportPackagePublic(BaseModel):

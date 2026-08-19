@@ -22,6 +22,7 @@ export default function Migration(): JSX.Element {
   })
 
   const [exportId, setExportId] = useState<number | ''>('')
+  const [testExportId, setTestExportId] = useState<number | ''>('')
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -41,9 +42,13 @@ export default function Migration(): JSX.Element {
   const makeTest = async (count: number) => {
     setError(null)
     setMessage(null)
+    if (!testExportId) {
+      setError('Select an export first')
+      return
+    }
     try {
-      const pkg = await post<ImportPackage>('/api/migrations/test', { count })
-      setMessage(`Test package created: ${pkg.name}`)
+      const pkg = await post<ImportPackage>('/api/migrations/test', { export_id: Number(testExportId), count })
+      setMessage(`Test package created from a real export: ${pkg.name}`)
       refetch()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'test package failed')
@@ -78,13 +83,32 @@ export default function Migration(): JSX.Element {
       </section>
 
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-4 space-y-3">
-        <h2 className="font-medium">Test migration builder</h2>
-        <div className="flex gap-2">
-          {TEST_COUNTS.map((c) => (
-            <button key={c} onClick={() => makeTest(c)} className="rounded-md border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800">
-              {c}
-            </button>
-          ))}
+        <h2 className="font-medium">Test import from a real export</h2>
+        <p className="text-sm text-slate-400">
+          Build a small WhatsApp test package from the first N messages of a real export,
+          so you can try the import before committing to the whole chat.
+        </p>
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="block text-xs text-slate-400">Source export</label>
+            <select value={testExportId} onChange={(e) => setTestExportId(Number(e.target.value))}
+              className="rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm">
+              <option value="">Select…</option>
+              {exports_?.filter((x) => x.messages_processed > 0).map((x) => (
+                <option key={x.id} value={x.id}>{x.chat_title} (#{x.id} · {x.messages_processed} msgs)</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-slate-400">Messages to include</label>
+            <div className="flex gap-1">
+              {TEST_COUNTS.map((c) => (
+                <button key={c} onClick={() => makeTest(c)} className="rounded-md border border-slate-700 px-2 py-1.5 text-sm hover:bg-slate-800">
+                  {c}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 

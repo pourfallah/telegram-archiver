@@ -160,14 +160,24 @@ async def create_test_package(
 ):
     settings = get_settings()
     out_dir = settings.exports_dir / "migrations" / "test" / f"test_{payload.count}_{int(datetime.now().timestamp())}"
-    try:
+
+    # Build the test package from the first N REAL messages of an export when a
+    # source export is given; otherwise fall back to synthetic sample data.
+    if payload.export_id is not None:
+        export = await _owned_export(payload.export_id, db, user)
+        if not export.export_dir or export.messages_processed <= 0:
+            raise HTTPException(status_code=400, detail="Export has no data yet")
+        manifest = build_whatsapp_package(
+            Path(export.export_dir), out_dir, limit=payload.count
+        )
+        name = f"Test from '{export.chat_title}' ({manifest['messages']} msgs)"
+    else:
         manifest = test_builder.build_test_package(payload.count, out_dir)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        name = f"Test package ({payload.count} messages)"
 
     pkg = ImportPackage(
         migration_job_id=None,
-        name=f"Test package ({payload.count} messages)",
+        name=name,
         package_path=str(out_dir),
         format="whatsapp",
         messages_count=manifest["messages"],

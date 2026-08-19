@@ -103,8 +103,11 @@ def _unique_name(dest_dir: Path, fname: str) -> str:
     return out
 
 
-def build_whatsapp_package(export_dir: Path, out_dir: Path) -> dict[str, Any]:
+def build_whatsapp_package(export_dir: Path, out_dir: Path, limit: int | None = None) -> dict[str, Any]:
     """Build a WhatsApp-style package from an export archive.
+
+    If ``limit`` is given, only the first ``limit`` messages (oldest-first) are
+    converted — used to make a small test import package from a real export.
 
     Returns manifest stats: {messages, media, users, date_min, date_max}.
     """
@@ -123,6 +126,9 @@ def build_whatsapp_package(export_dir: Path, out_dir: Path) -> dict[str, Any]:
         ][::-1]
     else:
         raise FileNotFoundError(f"export has no messages.json/jsonl at {export_dir}")
+
+    if limit:
+        messages = messages[:limit]
 
     sender_map = _sender_names(messages)
     media_root = export_dir / "media"
