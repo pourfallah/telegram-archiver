@@ -95,7 +95,7 @@ async def validate_peer(
     if account.status != "active":
         raise HTTPException(status_code=400, detail="Account is not logged in")
 
-    client = await manager.get_client(account)
+    client, _release = await manager.acquire_client(account)
     importer = TelegramImporter(client)
 
     # Resolve peer — payload should contain contact identifier (username/phone/id)

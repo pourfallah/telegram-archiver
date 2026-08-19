@@ -120,6 +120,12 @@ class TelegramImporter:
         except Exception:  # noqa: BLE001
             return None
 
+    async def resolve_peer(self, identifier: str):
+        """Resolve a contact identifier (username/phone/id) to (peer, entity)."""
+        entity = await self.client.get_entity(identifier)
+        peer = await self.client.get_input_entity(entity)
+        return peer, entity
+
     # ------------------------------------------------------- import protocol
 
     async def check_history_import_peer(self, peer) -> dict[str, Any]:

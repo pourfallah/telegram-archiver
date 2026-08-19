@@ -14,6 +14,8 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from app.config import get_settings
+from app.core.redis import get_redis
 from app.database import AsyncSessionLocal
 from app.models import ChatExport, ImportJob, TelegramSession
 from app.services.import_serializer import build_import_file, parse_import_head
@@ -50,8 +52,10 @@ async def _run_import_async(job_id: int) -> dict:
                 raise ValueError("Export or account missing")
 
             # Get target client
-            manager = SessionManager()
-            client = await manager.get_client(account)
+            settings = get_settings()
+            redis = await get_redis()
+            manager = SessionManager(settings=settings, redis=redis)
+            client, release = await manager.acquire_client(account)
             importer = TelegramImporter(client)
 
             # Resolve target peer
@@ -65,6 +69,7 @@ async def _run_import_async(job_id: int) -> dict:
                 job.status = "failed"
                 job.error = f"Peer resolution failed: {exc}"
                 await db.commit()
+                await release()
                 return {"error": job.error}
 
             # Phase 1: Peer validation
@@ -80,6 +85,7 @@ async def _run_import_async(job_id: int) -> dict:
                 job.status = "failed"
                 job.error = f"Peer check failed: {exc.error_code} — {exc.message}"
                 await db.commit()
+                await release()
                 return {"error": job.error}
 
             # Phase 2: Build import file
@@ -106,6 +112,7 @@ async def _run_import_async(job_id: int) -> dict:
                 job.status = "failed"
                 job.error = f"Format check failed: {exc.error_code} — {exc.message}"
                 await db.commit()
+                await release()
                 return {"error": job.error}
 
             # Phase 4: initHistoryImport
@@ -124,6 +131,7 @@ async def _run_import_async(job_id: int) -> dict:
                 job.status = "failed"
                 job.error = f"Init import failed: {exc.error_code} — {exc.message}"
                 await db.commit()
+                await release()
                 return {"error": job.error}
 
             # Phase 5: Upload media
@@ -150,6 +158,7 @@ async def _run_import_async(job_id: int) -> dict:
                 job.status = "failed"
                 job.error = f"Start import failed: {exc.error_code} — {exc.message}"
                 await db.commit()
+                await release()
                 return {"error": job.error}
 
             # Phase 7: Verify
@@ -196,6 +205,7 @@ async def _run_import_async(job_id: int) -> dict:
 
             job.finished_at = __import__("datetime").datetime.now(__import__("datetime").timezone.utc)
             await db.commit()
+            await release()
 
             return {"job_id": job_id, "status": job.status}
 
