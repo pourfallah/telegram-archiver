@@ -13,8 +13,14 @@ async def test_health_ok(client):
 
 
 @pytest.mark.asyncio
-async def test_stats_empty_database(client):
+async def test_stats_requires_auth(client):
     resp = await client.get("/api/stats")
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_stats_authenticated(client, auth_headers):
+    resp = await client.get("/api/stats", headers=auth_headers)
     assert resp.status_code == 200
     body = resp.json()
     assert body["accounts"] == 0

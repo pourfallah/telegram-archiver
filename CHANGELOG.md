@@ -7,12 +7,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added (planned)
 
-- Phase 2: Telegram account authentication (OTP + 2FA), encrypted sessions, dashboard auth (JWT), audit logging.
 - Phase 3: Chat export engine (checkpointed, pause/resume/cancel, JSON/HTML/SQLite writers).
 - Phase 4: Media downloader (concurrency-capped, hashed, retryable).
 - Phase 5: WhatsApp-compatible migration builder, test package builder, import assistant.
 - Phase 6: React dashboard.
 - Phase 7: Full test suite + release.
+
+## [0.2.0] - 2026-08-19
+
+### Added
+
+- Telegram account authentication flow (phone → OTP → 2FA) via Telethon, with
+  a Redis-mirrored login-flow manager and a bounded client pool
+  (`services/session_manager.py`).
+- Fernet-encrypted session storage (`api_hash` and Telethon session string are
+  never stored in plaintext) + Argon2 password hashing + JWT dashboard auth.
+- Account management API: create / list / get / status-check / delete,
+  scoped per dashboard user.
+- Fixed-window Redis rate limiting on login/code submission (fail-open).
+- Audit logging middleware with sensitive-field redaction (`core/audit.py`).
+- Admin user automatically seeded at startup from environment variables.
+- Test suite: 47 tests (crypto, auth API, account login flows against a mocked
+  Telethon client) — green on SQLite and PostgreSQL 16.
 
 ## [0.1.0] - 2026-08-19
 

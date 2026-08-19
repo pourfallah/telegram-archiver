@@ -49,7 +49,8 @@ Detailed design: [docs/architecture.md](docs/architecture.md).
 
 | Module | Status |
 |---|---|
-| Telegram account login (phone / OTP / 2FA), encrypted sessions, multi-account | Phase 2 (planned) |
+| Telegram account login (phone / OTP / 2FA), encrypted sessions, multi-account | ✅ Phase 2 complete |
+| Dashboard authentication (JWT), audit logging, rate limiting | ✅ Phase 2 complete |
 | Chat export → JSON / HTML / SQLite + media, with pause / resume / cancel / retry | Phases 3–4 (planned) |
 | WhatsApp-compatible migration packages (`_chat.txt` + media) | Phase 5 (planned) |
 | Test migration builder (10/50/100/500/1000 messages) | Phase 5 (planned) |

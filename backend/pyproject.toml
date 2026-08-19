@@ -24,6 +24,7 @@ dependencies = [
     "PyJWT>=2.8",
     "python-multipart>=0.0.9",
     "aiosqlite>=0.20",
+    "email-validator>=2.1",
 ]
 
 [project.optional-dependencies]

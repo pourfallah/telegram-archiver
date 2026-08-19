@@ -6,28 +6,49 @@ Database strategy:
 - Otherwise fall back to an in-memory SQLite database (aiosqlite),
   which keeps the unit test suite hermetic and fast.
 """
+import asyncio
 import os
 
+# Encryption key for the test process — MUST be set before any `app.*` module
+# is imported (Settings is cached at import time). Tests that need a specific
+# key override it explicitly via Settings(session_encryption_key=...).
+if "SESSION_ENCRYPTION_KEY" not in os.environ:
+    from cryptography.fernet import Fernet
+
+    os.environ["SESSION_ENCRYPTION_KEY"] = Fernet.generate_key().decode()
+
+import fakeredis.aioredis
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.pool import StaticPool
 
+from app.config import get_settings
+from app.core.crypto import hash_password
 from app.database import Base, get_session
 from app.main import create_app
+from app.models import UserAccount
+from app.services.rate_limit import FixedWindowLimiter
+from app.services.session_manager import SessionManager
+from tests.fakes import FakeClientFactory
 
 TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "")
+TEST_ADMIN_PASSWORD = "test-admin-pass-123"
 
 
 @pytest_asyncio.fixture
-async def db_engine():
+async def db_engine(tmp_path):
+    """File-based SQLite by default so concurrent sessions (endpoint + audit
+    middleware) serialize through the file lock instead of deadlocking on a
+    single in-memory connection. Set TEST_DATABASE_URL to run against a real
+    PostgreSQL (CI / scripts/test-pg.sh)."""
     if TEST_DATABASE_URL:
         engine = create_async_engine(TEST_DATABASE_URL, pool_pre_ping=True)
     else:
+        db_file = tmp_path / "test.db"
         engine = create_async_engine(
-            "sqlite+aiosqlite://",
-            connect_args={"check_same_thread": False},
-            poolclass=StaticPool,
+            f"sqlite+aiosqlite:///{db_file}",
+            connect_args={"timeout": 30},
         )
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -55,7 +76,58 @@ async def client(db_engine):
             yield session
 
     app.dependency_overrides[get_session] = override_get_session
+    app.state.session_factory = factory
+
+    fake_redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    app.state.redis = fake_redis
+    app.state.session_manager = SessionManager(
+        get_settings(), redis=fake_redis, client_factory=FakeClientFactory()
+    )
+    app.state.login_limiter = FixedWindowLimiter(fake_redis, 10, 300, "login:test")
+    app.state.code_limiter = FixedWindowLimiter(fake_redis, 10, 300, "code:test")
+
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        ac.app = app  # tests reach the app (state, session manager) through the client
         yield ac
     app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture
+async def admin_user(db_session):
+    user = UserAccount(
+        email="admin@example.com",
+        password_hash=hash_password(TEST_ADMIN_PASSWORD),
+        is_admin=True,
+        is_active=True,
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest_asyncio.fixture
+async def auth_headers(client, admin_user):
+    resp = await client.post(
+        "/api/auth/login",
+        json={"email": admin_user.email, "password": TEST_ADMIN_PASSWORD},
+    )
+    assert resp.status_code == 200, resp.text
+    token = resp.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+async def wait_for_audit(db_session, action: str, timeout: float = 2.0) -> None:
+    """Poll until the audit middleware's background task has written a row."""
+    from app.models import AuditLog
+
+    deadline = asyncio.get_running_loop().time() + timeout
+    while asyncio.get_running_loop().time() < deadline:
+        row = await db_session.scalar(
+            select(AuditLog).where(AuditLog.action == action)
+        )
+        if row is not None:
+            return
+        await asyncio.sleep(0.05)
+    raise AssertionError(f"audit row for action {action!r} was never written")

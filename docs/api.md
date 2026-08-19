@@ -34,15 +34,49 @@ Dashboard card numbers.
 }
 ```
 
-## Planned surface (Phases 2–6)
+## Deployed
+
+### `POST /api/auth/login`
+
+Dashboard login. Rate-limited (10/min per IP, Redis-backed, fail-open).
+
+```json
+// request
+{ "email": "admin@example.com", "password": "..." }
+// response 200
+{
+  "access_token": "eyJ...",
+  "token_type": "bearer",
+  "expires_in": 3600,
+  "user": { "id": 1, "email": "admin@example.com", "is_admin": true }
+}
+```
+
+All routes below require `Authorization: Bearer <token>`.
+
+### Telegram accounts
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/api/auth/login` | dashboard login → JWT |
-| GET/POST/DELETE | `/api/accounts` | Telegram accounts + login flow (phone/OTP/2FA) |
-| POST | `/api/accounts/{id}/check` | account status check |
-| GET | `/api/accounts/{id}/chats?q=` | dialog search |
-| POST | `/api/accounts/{id}/exports` | start export |
+| GET | `/api/accounts` | list the authenticated user's Telegram accounts |
+| POST | `/api/accounts` | create account + start login (sends OTP) — body `{phone, api_id, api_hash}` |
+| GET | `/api/accounts/{id}` | account detail |
+| POST | `/api/accounts/{id}/code` | submit OTP code — body `{code}`; 200 with `status: "auth_pending_2fa"` when a 2FA password is additionally required |
+| POST | `/api/accounts/{id}/2fa` | submit 2FA password — body `{password}` |
+| POST | `/api/accounts/{id}/check` | verify connectivity/status (`active` / `limited`) + current user info |
+| DELETE | `/api/accounts/{id}` | remove the account and its stored session |
+
+Login errors are machine-readable: `{"detail": {"error": "<code>", "message": "..."}}`
+with codes `invalid_phone`, `invalid_api`, `invalid_code`, `wrong_2fa_password`,
+`flood_wait` (429), `not_authenticated`, `flow_expired`, `already_logged_in`,
+`duplicate_phone` (409).
+
+## Planned surface (Phases 3–6)
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/accounts/{id}/chats?q=` | dialog search (Phase 3) |
+| POST | `/api/accounts/{id}/exports` | start export (Phase 3) |
 | GET | `/api/exports`, `/api/exports/{id}` | export list/detail |
 | POST | `/api/exports/{id}/pause\|resume\|cancel\|retry-failed` | lifecycle controls |
 | GET | `/api/exports/{id}/progress` | %, counts, speed, ETA, logs |
