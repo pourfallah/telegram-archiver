@@ -1,0 +1,247 @@
+"""Peer validation and Telegram history-import API endpoints."""
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.deps import get_session_manager
+from app.core.security import get_current_user
+from app.database import get_session
+from app.models import ChatExport, ImportJob, TelegramSession, UserAccount
+from app.schemas.import_job import (
+    ImportJobPublic,
+    ImportJobStatus,
+    PeerInfo,
+    PeerValidationResult,
+    TestImportRequest,
+)
+from app.services.canonical_archive import build_canonical_archive
+from app.services.session_manager import SessionManager
+from app.services.telegram_import import (
+    ImportProtocolError,
+    TelegramImporter,
+)
+
+router = APIRouter(
+    prefix="/api/import",
+    tags=["import"],
+    dependencies=[Depends(get_current_user)],
+)
+
+DbSession = Annotated[AsyncSession, Depends(get_session)]
+Manager = Annotated[SessionManager, Depends(get_session_manager)]
+
+
+async def _get_owned_account(account_id: int, db: DbSession, user) -> TelegramSession:
+    row = await db.scalar(
+        select(TelegramSession).where(
+            TelegramSession.id == account_id,
+            TelegramSession.user_account_id == user.id,
+        )
+    )
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
+    return row
+
+
+async def _get_owned_export(export_id: int, db: DbSession, user) -> ChatExport:
+    row = await db.scalar(
+        select(ChatExport).join(TelegramSession).where(
+            ChatExport.id == export_id,
+            TelegramSession.user_account_id == user.id,
+        )
+    )
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Export not found")
+    return row
+
+
+def _http_import_error(exc: ImportProtocolError) -> HTTPException:
+    return HTTPException(
+        status_code=400,
+        detail={"error": exc.error_code, "message": exc.message},
+    )
+
+
+def _to_peer_info(info: dict) -> PeerInfo:
+    return PeerInfo(
+        peer_id=info.get("peer_id"),
+        peer_type=info.get("peer_type"),
+        username=info.get("username"),
+        title=info.get("title"),
+        mutual_contact=info.get("mutual_contact"),
+        message_count=info.get("current_message_count"),
+    )
+
+
+@router.post("/{account_id}/validate-peer", response_model=PeerValidationResult)
+async def validate_peer(
+    account_id: int,
+    payload: TestImportRequest,  # reusing for peer identifier
+    db: DbSession,
+    user: Annotated[UserAccount, Depends(get_current_user)],
+    manager: Manager,
+):
+    """
+    Validate whether a target peer can receive history import.
+
+    Steps:
+    1. Resolve the peer from the source account's session (Account A).
+    2. Call messages.checkHistoryImportPeer(peer).
+    3. Return the real Telegram confirm text + eligibility.
+    """
+    account = await _get_owned_account(account_id, db, user)
+    if account.status != "active":
+        raise HTTPException(status_code=400, detail="Account is not logged in")
+
+    client = await manager.get_client(account)
+    importer = TelegramImporter(client)
+
+    # Resolve peer — payload should contain contact identifier (username/phone/id)
+    identifier = payload.contact_identifier
+    try:
+        peer, ent = await importer.resolve_peer(identifier)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Could not resolve peer: {exc}") from exc
+
+    # Gather pre-flight info
+    info = await importer.peer_info(peer, ent)
+
+    # Actual Telegram peer check
+    try:
+        check = await importer.check_history_import_peer(peer)
+    except ImportProtocolError as exc:
+        return PeerValidationResult(
+            allowed=False,
+            confirm_text="",
+            error_code=exc.error_code,
+            error_message=exc.message,
+            peer=_to_peer_info(info),
+        )
+
+    return PeerValidationResult(
+        allowed=True,
+        confirm_text=check.get("confirm_text", ""),
+        peer=_to_peer_info(info),
+    )
+
+
+@router.post("/{account_id}/test-import", response_model=ImportJobPublic, status_code=status.HTTP_201_CREATED)
+async def start_test_import(
+    account_id: int,
+    payload: TestImportRequest,
+    db: DbSession,
+    user: Annotated[UserAccount, Depends(get_current_user)],
+    manager: Manager,
+):
+    """
+    Start a test import job from a real export.
+
+    This is the end-to-end test path:
+    1. Select source export (Account A's export)
+    2. Select target peer (Account B's existing A<->B chat)
+    3. Choose message count (10/50/100/...)
+    4. Run full import protocol and verification.
+    """
+    account = await _get_owned_account(account_id, db, user)
+    if account.status != "active":
+        raise HTTPException(status_code=400, detail="Account is not logged in")
+
+    export = await _get_owned_export(payload.export_id, db, user)
+
+    # Build canonical archive if not already present
+    from pathlib import Path
+    export_dir = Path(export.export_dir)
+    archive_dir = export_dir / "archive"
+    if not archive_dir.exists():
+        _ = build_canonical_archive(
+            export_dir, archive_dir,
+            {"id": export.chat_id, "title": export.chat_title, "type": export.chat_type},
+        )
+    else:
+        import json
+        _ = json.loads((archive_dir / "manifest.json").read_text())
+
+    # Create import job record
+    job = ImportJob(
+        source_export_id=export.id,
+        target_account_id=account_id,
+        target_peer_id=payload.target_peer_id,
+        message_limit=payload.count,
+        status=ImportJobStatus.QUEUED,
+        options={
+            "contact_identifier": payload.contact_identifier,
+            "test_mode": True,
+        },
+    )
+    db.add(job)
+    await db.commit()
+    await db.refresh(job)
+
+    # TODO: dispatch Celery task to run actual import
+    # for now return the job; worker picks it up
+
+    return ImportJobPublic(
+        id=job.id,
+        source_export_id=job.source_export_id,
+        target_account_id=job.target_account_id,
+        target_peer_id=job.target_peer_id,
+        message_limit=job.message_limit,
+        status=job.status,
+        options=job.options,
+        created_at=job.created_at,
+    )
+
+
+@router.get("/jobs", response_model=list[ImportJobPublic])
+async def list_import_jobs(
+    db: DbSession,
+    user: Annotated[UserAccount, Depends(get_current_user)],
+):
+    rows = (
+        await db.scalars(
+            select(ImportJob).join(ChatExport).join(TelegramSession).where(
+                TelegramSession.user_account_id == user.id
+            ).order_by(ImportJob.created_at.desc())
+        )
+    ).all()
+    return [
+        ImportJobPublic(
+            id=r.id,
+            source_export_id=r.source_export_id,
+            target_account_id=r.target_account_id,
+            target_peer_id=r.target_peer_id,
+            message_limit=r.message_limit,
+            status=r.status,
+            options=r.options,
+            created_at=r.created_at,
+        )
+        for r in rows
+    ]
+
+
+@router.get("/jobs/{job_id}", response_model=ImportJobPublic)
+async def get_import_job(
+    job_id: int,
+    db: DbSession,
+    user: Annotated[UserAccount, Depends(get_current_user)],
+):
+    row = await db.scalar(
+        select(ImportJob).join(ChatExport).join(TelegramSession).where(
+            ImportJob.id == job_id,
+            TelegramSession.user_account_id == user.id,
+        )
+    )
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Import job not found")
+    return ImportJobPublic(
+        id=row.id,
+        source_export_id=row.source_export_id,
+        target_account_id=row.target_account_id,
+        target_peer_id=row.target_peer_id,
+        message_limit=row.message_limit,
+        status=row.status,
+        options=row.options,
+        created_at=row.created_at,
+    )

@@ -1,6 +1,7 @@
 """SQLAlchemy models. Importing this package registers all tables on Base.metadata."""
 from app.models.audit_log import AuditLog
 from app.models.chat_export import ChatExport
+from app.models.import_job import ImportJob
 from app.models.import_package import ImportPackage
 from app.models.media_file import MediaFile
 from app.models.message import Message
@@ -11,6 +12,7 @@ from app.models.user_account import UserAccount
 __all__ = [
     "AuditLog",
     "ChatExport",
+    "ImportJob",
     "ImportPackage",
     "MediaFile",
     "Message",
