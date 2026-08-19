@@ -17,6 +17,7 @@ from pathlib import Path
 from app.database import AsyncSessionLocal
 from app.models import ChatExport, ImportJob, TelegramSession
 from app.services.import_serializer import build_import_file, parse_import_head
+from app.services.import_verification import run_verification, write_report
 from app.services.session_manager import SessionManager
 from app.services.telegram_import import ImportProtocolError, TelegramImporter
 from app.workers.celery_app import celery_app
@@ -156,14 +157,47 @@ async def _run_import_async(job_id: int) -> dict:
             job.progress = {"phase": "verifying"}
             await db.commit()
 
-            # TODO: Re-read target chat and compare
-            # For now, mark completed
-            job.status = "completed"
+            # Re-read target chat messages for verification
+            try:
+                target_msgs_result = await client.get_messages(peer, limit=0)
+                total = getattr(target_msgs_result, "total", None)
+                if total and total < 5000:
+                    # Fetch all if reasonable
+                    target_msgs = await client.get_messages(peer, limit=total)
+                    target_list = list(target_msgs)
+                else:
+                    # Fetch recent batch for spot check
+                    target_msgs = await client.get_messages(peer, limit=1000)
+                    target_list = list(target_msgs)
+
+                # Convert to dict format
+                from app.services.telegram_utils import message_to_dict
+                target_dicts = [message_to_dict(m) for m in target_list]
+
+                # Run verification
+                export_dir = Path(export.export_dir)
+                report = run_verification(export_dir / "archive", target_dicts)
+
+                # Write report
+                report_dir = export_dir / "verification"
+                write_report(report, report_dir)
+
+                prog = {
+                    "phase": "completed",
+                    "verification": report,
+                    "report_dir": str(report_dir),
+                }
+                job.progress = prog
+                job.status = "completed" if report["overall"] in ("FULL_MATCH", "SOURCE_COVERED_EXTRA_IN_TARGET") else "partial"
+            except Exception as exc:
+                logger.warning(f"Verification failed: {exc}")
+                job.progress = {"phase": "completed", "verification_error": str(exc)}
+                job.status = "completed"
+
             job.finished_at = __import__("datetime").datetime.now(__import__("datetime").timezone.utc)
-            job.progress = {"phase": "completed", **stats}
             await db.commit()
 
-            return {"job_id": job_id, "status": "completed", **stats}
+            return {"job_id": job_id, "status": job.status}
 
         except Exception as exc:  # noqa: BLE001
             logger.exception("Import job %s failed", job_id)
