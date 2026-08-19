@@ -71,19 +71,32 @@ with codes `invalid_phone`, `invalid_api`, `invalid_code`, `wrong_2fa_password`,
 `flood_wait` (429), `not_authenticated`, `flow_expired`, `already_logged_in`,
 `duplicate_phone` (409).
 
-## Planned surface (Phases 3–6)
+### Chat search & exports
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/api/accounts/{id}/chats?q=` | dialog search (Phase 3) |
-| POST | `/api/accounts/{id}/exports` | start export (Phase 3) |
-| GET | `/api/exports`, `/api/exports/{id}` | export list/detail |
-| POST | `/api/exports/{id}/pause\|resume\|cancel\|retry-failed` | lifecycle controls |
-| GET | `/api/exports/{id}/progress` | %, counts, speed, ETA, logs |
-| GET | `/api/exports/{id}/files?path=` | authenticated artifact download |
-| POST | `/api/migrations` | build WhatsApp package from export |
-| POST | `/api/migrations/test` | test package builder (10/50/100/500/1000) |
-| POST | `/api/import/validate` | validate package |
-| GET | `/api/import/{id}/instructions` | import instructions |
-| GET | `/api/jobs` | live job progress |
-| GET | `/api/audit` | audit trail |
+| GET | `/api/accounts/{id}/chats?q=` | dialog search by username / title / id |
+| POST | `/api/accounts/{id}/exports` | start an export — body `{chat_id, format: json\|html\|sqlite\|all, include_media}` |
+| GET | `/api/exports` / `/api/exports/{id}` | list / detail exports (scoped per user) |
+| GET | `/api/exports/{id}/progress` | live progress: status, percent, counts, speed, ETA, checkpoint |
+| POST | `/api/exports/{id}/pause` / `cancel` / `resume` | lifecycle controls (terminal states guarded with 409) |
+| GET | `/api/exports/{id}/files?path=` | authenticated artifact listing (path-traversal safe) |
+| GET | `/api/exports/{id}/download?path=` | download an artifact |
+| DELETE | `/api/exports/{id}` | purge the export + on-disk files |
+
+### Migration & import
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/api/migrations` | build a WhatsApp package from a completed export — body `{export_id}` |
+| GET | `/api/migrations` | list the user's migration jobs |
+| POST | `/api/migrations/test` | test package builder — body `{count: 10\|50\|100\|500\|1000}` |
+| GET | `/api/import/packages` | list generated import packages |
+| POST | `/api/import/validate` | validate a package — body `{package_id}` → status + stats |
+| GET | `/api/import/{id}/instructions` | step-by-step import instructions for a package |
+
+### Not yet shipped (planned)
+
+- `POST /api/exports/{id}/retry-failed` — re-queue failed media downloads.
+- `GET /api/jobs` — consolidated live job feed (poll the exports endpoint today).
+- `GET /api/audit` — audit trail listing.

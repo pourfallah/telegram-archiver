@@ -5,9 +5,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### Added (planned)
+### Planned
 
-- Phase 7: Full test suite + release.
+- `POST /api/exports/{id}/retry-failed` (re-queue failed media downloads).
+- `GET /api/jobs` consolidated live job feed.
+- `GET /api/audit` audit trail listing.
+
+## [1.0.0] - 2026-08-19
+
+### Phase 7 — finalization & release
+
+- Full backend test suite green: **68 tests** (auth, accounts, export engine,
+  crash-resume, media downloader, converter, test builder, import validation,
+  migrations API). Lint clean (ruff).
+- Frontend production build (`vite build`) passes cleanly.
+- `docs/api.md` updated to document the shipped export / migration / import surface.
+- Feature-complete for the core product: multi-account login → chat export (JSON/HTML/
+  SQLite + media) → WhatsApp-compatible migration packages → validation + import
+  instructions, all through a web dashboard.
 
 ## [0.6.0] - 2026-08-19
 

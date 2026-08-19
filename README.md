@@ -5,7 +5,7 @@ media, full metadata) and **prepare migration/import packages** — with a moder
 dashboard, background workers, and honest documentation of what Telegram's API can and
 cannot do.
 
-> **Status:** in development — Phase 6 (dashboard) complete; Phase 7 (testing + release) next.
+> **Status:** stable — all phases complete. See `CHANGELOG.md` for the release history.
 > See `PROJECT_PLAN.md` for the full plan; see `CHANGELOG.md` for progress.
 
 ---
@@ -57,7 +57,7 @@ Detailed design: [docs/architecture.md](docs/architecture.md).
 | Test migration builder (10/50/100/500/1000 messages) | ✅ Phase 5 complete |
 | Import assistant wizard with validation + honest instructions | ✅ Phase 5 complete |
 | Web dashboard (cards, jobs, progress, ETA) | ✅ Phase 6 complete |
-| Unit + integration tests, CI | Phase 7 (final) |
+| Unit + integration tests, CI (68 green) | ✅ Phase 7 complete |
 
 ---
 
