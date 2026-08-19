@@ -245,3 +245,28 @@ async def get_import_job(
         options=row.options,
         created_at=row.created_at,
     )
+
+
+@router.post("/jobs/{job_id}/start")
+async def start_import_job(
+    job_id: int,
+    db: DbSession,
+    user: Annotated[UserAccount, Depends(get_current_user)],
+):
+    """Dispatch the Celery task to run the import job."""
+    from app.workers.import_tasks import run_import
+
+    row = await db.scalar(
+        select(ImportJob).join(ChatExport).join(TelegramSession).where(
+            ImportJob.id == job_id,
+            TelegramSession.user_account_id == user.id,
+        )
+    )
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Import job not found")
+
+    if row.status not in ("queued", "failed", "cancelled"):
+        raise HTTPException(status_code=400, detail=f"Job cannot be started from status {row.status}")
+
+    run_import.delay(job_id)
+    return {"job_id": job_id, "dispatched": True}

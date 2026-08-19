@@ -13,7 +13,7 @@ celery_app = Celery(
     "telegram_archiver",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["app.workers.tasks"],
+    include=["app.workers.tasks", "app.workers.import_tasks"],
 )
 
 celery_app.conf.update(
