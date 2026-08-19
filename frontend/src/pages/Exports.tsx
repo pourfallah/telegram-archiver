@@ -1,0 +1,122 @@
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { api, post } from '../lib/api'
+import type { Account, ChatResult, ExportJob } from '../lib/types'
+
+function Progress({ status, processed, total }: { status: string; processed: number; total: number | null }) {
+  const pct = total ? Math.round((processed / total) * 100) : 0
+  return (
+    <div className="flex items-center gap-2">
+      <div className="h-2 flex-1 overflow-hidden rounded bg-slate-800">
+        <div className="h-full bg-emerald-500" style={{ width: `${pct}%` }} />
+      </div>
+      <span className="text-xs text-slate-400">
+        {processed}{total ? ` / ${total} (${pct}%)` : ''} · {status}
+      </span>
+    </div>
+  )
+}
+
+export default function Exports(): JSX.Element {
+  const { data: accounts } = useQuery({ queryKey: ['accounts'], queryFn: () => api<Account[]>('/api/accounts') })
+  const { data: exports_, refetch } = useQuery({
+    queryKey: ['exports'],
+    queryFn: () => api<ExportJob[]>('/api/exports'),
+    refetchInterval: 3000,
+  })
+
+  const [accountId, setAccountId] = useState<number | ''>('')
+  const [q, setQ] = useState('')
+  const [results, setResults] = useState<ChatResult[]>([])
+  const [format, setFormat] = useState('all')
+  const [error, setError] = useState<string | null>(null)
+
+  const search = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    try {
+      setResults(await api<ChatResult[]>(`/api/accounts/${accountId}/chats?q=${encodeURIComponent(q)}`))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'search failed')
+    }
+  }
+
+  const createExport = async (chat: ChatResult) => {
+    setError(null)
+    try {
+      await post(`/api/accounts/${accountId}/exports`, { chat_id: chat.id, format, include_media: true })
+      setResults([])
+      refetch()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'export failed')
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <h1 className="text-2xl font-semibold">Exports</h1>
+
+      <div className="rounded-xl border border-slate-800 bg-slate-900 p-4 space-y-3">
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="block text-xs text-slate-400">Account</label>
+            <select value={accountId} onChange={(e) => setAccountId(Number(e.target.value))}
+              className="rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm">
+              <option value="">Select account…</option>
+              {accounts?.map((a) => <option key={a.id} value={a.id}>{a.phone}</option>)}
+            </select>
+          </div>
+          <form onSubmit={search} className="flex items-end gap-2">
+            <div>
+              <label className="block text-xs text-slate-400">Search chat (username / title / id)</label>
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="family"
+                className="rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm" />
+            </div>
+            <button className="rounded-md bg-slate-700 px-3 py-2 text-sm hover:bg-slate-600">Search</button>
+          </form>
+          <div>
+            <label className="block text-xs text-slate-400">Format</label>
+            <select value={format} onChange={(e) => setFormat(e.target.value)}
+              className="rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm">
+              <option value="all">All (JSON + HTML + SQLite)</option>
+              <option value="json">JSON</option>
+              <option value="html">HTML</option>
+              <option value="sqlite">SQLite</option>
+            </select>
+          </div>
+        </div>
+        {error && <p className="text-sm text-rose-400">{error}</p>}
+        {results.length > 0 && (
+          <ul className="space-y-2">
+            {results.map((c) => (
+              <li key={c.id} className="flex items-center justify-between rounded-md border border-slate-700 bg-slate-800 px-3 py-2">
+                <span className="text-sm">{c.title} <span className="text-xs text-slate-500">({c.type}{c.username ? ` · @${c.username}` : ''})</span></span>
+                <button onClick={() => createExport(c)} className="rounded-md bg-emerald-600 px-2 py-1 text-xs hover:bg-emerald-500">
+                  Export
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="space-y-3">
+        {exports_?.map((e) => (
+          <div key={e.id} className="rounded-xl border border-slate-800 bg-slate-900 p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-medium">{e.chat_title}</span>
+              <span className="text-xs text-slate-400">{e.format} · {e.status}</span>
+            </div>
+            <Progress status={e.status} processed={e.messages_processed} total={e.total_messages_est} />
+            <div className="flex gap-2 text-xs">
+              <span className="text-slate-400">Media: {e.files_downloaded}/{e.files_total}</span>
+              <span className="text-slate-400">Speed: {e.speed_mps.toFixed(2)} msg/s</span>
+              {e.eta_seconds != null && <span className="text-slate-400">ETA: {Math.round(e.eta_seconds / 60)}m</span>}
+            </div>
+            {e.error && <p className="text-xs text-rose-400">{e.error}</p>}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}

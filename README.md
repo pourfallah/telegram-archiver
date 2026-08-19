@@ -5,7 +5,7 @@ media, full metadata) and **prepare migration/import packages** — with a moder
 dashboard, background workers, and honest documentation of what Telegram's API can and
 cannot do.
 
-> **Status:** in development — Phase 5 (converter + import assistant) complete; Phase 6 (dashboard) next.
+> **Status:** in development — Phase 6 (dashboard) complete; Phase 7 (testing + release) next.
 > See `PROJECT_PLAN.md` for the full plan; see `CHANGELOG.md` for progress.
 
 ---
@@ -56,8 +56,8 @@ Detailed design: [docs/architecture.md](docs/architecture.md).
 | WhatsApp-compatible migration packages (`_chat.txt` + media) | ✅ Phase 5 complete |
 | Test migration builder (10/50/100/500/1000 messages) | ✅ Phase 5 complete |
 | Import assistant wizard with validation + honest instructions | ✅ Phase 5 complete |
-| Web dashboard (cards, jobs, progress, ETA) | Phase 6 (planned) |
-| Unit + integration tests, CI | Phase 7 (planned) |
+| Web dashboard (cards, jobs, progress, ETA) | ✅ Phase 6 complete |
+| Unit + integration tests, CI | Phase 7 (final) |
 
 ---
 

@@ -7,8 +7,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added (planned)
 
-- Phase 6: React dashboard.
 - Phase 7: Full test suite + release.
+
+## [0.6.0] - 2026-08-19
+
+### Added — Phase 6 (web dashboard)
+
+- Functional React + TypeScript + Tailwind dashboard: JWT login, layout + nav.
+- Dashboard cards (accounts, exports, running jobs, storage) via `/api/stats`.
+- Accounts page: list, multi-step login wizard (phone → OTP → 2FA), status badges,
+  check + delete.
+- Exports page: chat search (username/title/id), format picker, create export, live
+  progress bars with counts / speed / ETA (3s polling).
+- Migration page: convert a completed export to a WhatsApp package, test-package
+  builder (10/50/100/500/1000), recent migrations + packages list.
+- Import Assistant page: select a package, validate (messages/media/users/date range),
+  and view step-by-step import instructions.
+- Production `vite build` passes cleanly.
 
 ## [0.5.0] - 2026-08-19
 
