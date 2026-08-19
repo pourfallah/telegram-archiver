@@ -272,6 +272,7 @@ class ExportEngine:
                 {
                     "chat_export_id": export.id,
                     "message_id": r["id"],
+                    "grouped_id": r.get("grouped_id"),
                     "date": _as_aware_datetime(r["date"]),
                     "edit_date": _as_aware_datetime(r["edited"]),
                     "sender_id": (r.get("sender") or {}).get("id"),

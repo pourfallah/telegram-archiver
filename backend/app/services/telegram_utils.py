@@ -173,6 +173,7 @@ def classify_media(message) -> list[dict[str, Any]]:
 
         media_type = "document"
         original = None
+        meta: dict[str, Any] = {}
         for attr in attrs:
             attr_kind = MEDIA_ATTRIBUTE_MAP.get(type(attr).__name__)
             if attr_kind in {"video", "animation", "sticker"}:
@@ -181,6 +182,21 @@ def classify_media(message) -> list[dict[str, Any]]:
                 media_type = "voice" if getattr(attr, "voice", False) else "audio"
             if hasattr(attr, "file_name") and attr.file_name:
                 original = attr.file_name
+            # best-effort sub-metadata so nothing is dropped at export time
+            if attr_kind == "video":
+                meta.update({"duration": getattr(attr, "duration", None),
+                             "width": getattr(attr, "w", None), "height": getattr(attr, "h", None),
+                             "round": bool(getattr(attr, "round_message", False))})
+            elif attr_kind == "audio":
+                meta.update({"duration": getattr(attr, "duration", None),
+                             "voice": bool(getattr(attr, "voice", False)),
+                             "title": getattr(attr, "title", None),
+                             "performer": getattr(attr, "performer", None)})
+            elif attr_kind == "sticker":
+                meta.update({"sticker_emoji": getattr(attr, "emoji", None),
+                             "animated": bool(getattr(attr, "animated", False))})
+            elif attr_kind == "animation":
+                meta["gif"] = True
 
         if media_type == "video" and mime == "image/gif":
             media_type = "gif"
@@ -193,6 +209,7 @@ def classify_media(message) -> list[dict[str, Any]]:
                 mime_type=mime,
                 size_bytes=size,
                 original_filename=original,
+                extra=meta or None,
             )
         )
 
@@ -303,6 +320,7 @@ def message_to_dict(message) -> dict[str, Any]:
     media = classify_media(message)
     return {
         "id": int(getattr(message, "id", 0)),
+        "grouped_id": getattr(message, "grouped_id", None),
         "date": isoformat(getattr(message, "date", None)),
         "edited": isoformat(getattr(message, "edit_date", None)),
         "sender": sender_info(sender),

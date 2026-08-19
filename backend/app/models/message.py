@@ -32,6 +32,9 @@ class Message(Base):
     )
 
     message_id: Mapped[int] = mapped_column(BigInteger)
+    # original Telegram message id stays in message_id; grouped_id preserves
+    # album/media-group membership so collages can be rebuilt on import.
+    grouped_id: Mapped[int | None] = mapped_column(BigInteger, index=True)
     date: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     edit_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

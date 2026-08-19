@@ -10,6 +10,7 @@ from app.core.security import get_current_user
 from app.database import get_session
 from app.models import ChatExport, TelegramSession, UserAccount
 from app.schemas.export import ChatSearchResult, ExportCreate, ExportPublic
+from app.services.canonical_archive import build_canonical_archive as _build_canonical_archive
 from app.services.session_manager import SessionManager
 from app.services.telegram_utils import serialize_input_peer
 
@@ -179,3 +180,32 @@ async def create_export(
 
     request.app.state.task_runner.enqueue(export.id)
     return await _to_export_public(export)
+
+
+@router.post("/{account_id}/exports/{export_id}/archive")
+async def build_archive(
+    account_id: int,
+    export_id: int,
+    db: DbSession,
+    user: Annotated[UserAccount, Depends(get_current_user)],
+):
+    """Build the loss-minimizing canonical archive from an export."""
+    from pathlib import Path
+
+    account = await _get_owned_account(account_id, db, user)
+    export = await db.scalar(
+        select(ChatExport).where(
+            ChatExport.id == export_id, ChatExport.telegram_session_id == account.id
+        )
+    )
+    if export is None:
+        raise HTTPException(status_code=404, detail="Export not found")
+    if not export.export_dir:
+        raise HTTPException(status_code=400, detail="Export has no data yet")
+    out_dir = Path(export.export_dir) / "archive"
+    stats = _build_canonical_archive(
+        Path(export.export_dir),
+        out_dir,
+        {"id": export.chat_id, "title": export.chat_title, "type": export.chat_type},
+    )
+    return {"export_id": export.id, "archive_dir": str(out_dir), **stats}
