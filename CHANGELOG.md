@@ -7,9 +7,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added (planned)
 
-- Phase 5: WhatsApp-compatible migration builder, test package builder, import assistant.
 - Phase 6: React dashboard.
 - Phase 7: Full test suite + release.
+
+## [0.5.0] - 2026-08-19
+
+### Added — Phase 5 (converter + import assistant)
+
+- WhatsApp-compatible migration builder (`services/converter.py`): converts a Telegram
+  export into a `_chat.txt` + `media/` + `manifest.json` package that Telegram's official
+  importer accepts. Line format `DD/MM/YYYY, HH:mm - Sender: message`, `<Attached: file>`
+  + caption lines, and a **strict sender map** (distinct sender ids are never merged).
+- Test migration builder (`services/test_builder.py`): generates 10/50/100/500/1000-message
+  packages with real media samples (guarantees the importer's "must contain media" rule).
+- Import assistant (`services/import_assistant.py`): validates package structure and
+  produces honest, step-by-step import instructions (official-importer path + manual
+  fallback), persisted as `INSTRUCTIONS.md`.
+- Migration + import APIs: convert a completed export, list migrations, build test
+  packages, validate, and fetch instructions.
+- Test coverage for converter line-format/sender mapping, test builder, import validation,
+  and the full migration API flow (68 tests green).
 
 ## [0.4.0] - 2026-08-19
 
