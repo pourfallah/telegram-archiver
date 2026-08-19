@@ -6,6 +6,7 @@ const links = [
   { to: '/accounts', label: 'Accounts' },
   { to: '/exports', label: 'Exports' },
   { to: '/migration', label: 'Migration' },
+  { to: '/test-import', label: 'Test Import' },
   { to: '/import', label: 'Import Assistant' },
 ]
 

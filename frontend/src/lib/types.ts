@@ -111,3 +111,49 @@ export interface Instruction {
   title: string
   detail: string
 }
+
+export interface PeerInfo {
+  peer_id: number | null
+  peer_type: string | null
+  username: string | null
+  title: string | null
+  mutual_contact: boolean | null
+  message_count: number | null
+}
+
+export interface PeerValidationResult {
+  allowed: boolean
+  confirm_text: string
+  error_code: string | null
+  error_message: string | null
+  peer: PeerInfo
+}
+
+export type ImportJobStatus =
+  | 'queued'
+  | 'validating'
+  | 'peer_checking'
+  | 'import_initialized'
+  | 'media_uploading'
+  | 'starting_import'
+  | 'waiting'
+  | 'verifying'
+  | 'completed'
+  | 'partial'
+  | 'failed'
+  | 'cancelled'
+
+export interface ImportJobPublic {
+  id: number
+  source_export_id: number
+  target_account_id: number
+  target_peer_id: number | null
+  message_limit: number
+  status: ImportJobStatus
+  options: Record<string, unknown>
+  created_at: string
+  started_at: string | null
+  finished_at: string | null
+  error: string | null
+  progress: Record<string, unknown> | null
+}
