@@ -230,7 +230,13 @@ class ExportEngine:
     async def _total_messages(self, client, entity) -> int | None:
         try:
             result = await client.get_messages(entity, limit=0)
-            return getattr(result, "total", None)
+            total = getattr(result, "total", None)
+            # Telegram reports 2147483647 as the total for very large / unknown
+            # histories — treat it as unknown so progress is shown as counts
+            # (with ETA) rather than a misleading ~0% bar.
+            if total in (0, 2**31 - 1):
+                return None
+            return total
         except Exception:
             return None  # total unknown — progress shown as counts only
 

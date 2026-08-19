@@ -161,7 +161,7 @@ async def resume_export(
         raise HTTPException(status_code=409, detail="Export is already running")
     export.status = "queued"
     await db.commit()
-    await request.app.state.task_runner.enqueue(export_id)
+    request.app.state.task_runner.enqueue(export_id)
     await db.refresh(export)
     return _to_public(export)
 

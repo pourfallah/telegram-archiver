@@ -107,13 +107,39 @@ export default function Exports(): JSX.Element {
               <span className="font-medium">{e.chat_title}</span>
               <span className="text-xs text-slate-400">{e.format} · {e.status}</span>
             </div>
-            <Progress status={e.status} processed={e.messages_processed} total={e.total_messages_est} />
+            <Progress status={e.status} processed={e.messages_processed} total={e.total_messages_est && e.total_messages_est < 2 ** 31 - 1 ? e.total_messages_est : null} />
             <div className="flex gap-2 text-xs">
               <span className="text-slate-400">Media: {e.files_downloaded}/{e.files_total}</span>
               <span className="text-slate-400">Speed: {e.speed_mps.toFixed(2)} msg/s</span>
               {e.eta_seconds != null && <span className="text-slate-400">ETA: {Math.round(e.eta_seconds / 60)}m</span>}
             </div>
             {e.error && <p className="text-xs text-rose-400">{e.error}</p>}
+            <div className="flex gap-2">
+              {(e.status === 'running' || e.status === 'queued') && (
+                <button
+                  onClick={() => post(`/api/exports/${e.id}/pause`).then(() => refetch())}
+                  className="rounded-md border border-amber-600 px-2 py-1 text-xs text-amber-300 hover:bg-amber-600/20"
+                >
+                  Pause
+                </button>
+              )}
+              {(e.status === 'paused' || e.status === 'cancelled' || e.status === 'failed') && (
+                <button
+                  onClick={() => post(`/api/exports/${e.id}/resume`).then(() => refetch())}
+                  className="rounded-md border border-emerald-600 px-2 py-1 text-xs text-emerald-300 hover:bg-emerald-600/20"
+                >
+                  Resume
+                </button>
+              )}
+              {(e.status === 'running' || e.status === 'queued' || e.status === 'paused') && (
+                <button
+                  onClick={() => post(`/api/exports/${e.id}/cancel`).then(() => refetch())}
+                  className="rounded-md border border-rose-600 px-2 py-1 text-xs text-rose-300 hover:bg-rose-600/20"
+                >
+                  Cancel
+                </button>
+              )}
+            </div>
           </div>
         ))}
       </div>

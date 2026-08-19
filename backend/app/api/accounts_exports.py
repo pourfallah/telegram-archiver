@@ -177,5 +177,5 @@ async def create_export(
     await db.commit()
     await db.refresh(export)
 
-    await request.app.state.task_runner.enqueue(export.id)
+    request.app.state.task_runner.enqueue(export.id)
     return await _to_export_public(export)
