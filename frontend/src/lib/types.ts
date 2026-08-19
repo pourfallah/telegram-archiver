@@ -54,6 +54,23 @@ export interface ExportProgress {
   error: string | null
 }
 
+export interface PreviewMessage {
+  id: number
+  date: string | null
+  sender: string | null
+  text: string | null
+  media: string[] | null
+  reply_to: number | null
+}
+
+export interface ExportPreview {
+  export_id: number
+  status: string
+  total_messages: number
+  partial: boolean
+  messages: PreviewMessage[]
+}
+
 export interface MigrationJob {
   id: number
   chat_export_id: number

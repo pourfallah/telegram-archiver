@@ -109,11 +109,20 @@ def build_whatsapp_package(export_dir: Path, out_dir: Path) -> dict[str, Any]:
     Returns manifest stats: {messages, media, users, date_min, date_max}.
     """
     msgs_path = export_dir / "messages.json"
-    if not msgs_path.exists():
-        raise FileNotFoundError(f"export has no messages.json at {export_dir}")
-
-    archive = json.loads(msgs_path.read_text(encoding="utf-8"))
-    messages: list[dict] = archive.get("messages", [])  # oldest-first
+    lines_path = export_dir / "messages.jsonl"
+    if msgs_path.exists():
+        archive = json.loads(msgs_path.read_text(encoding="utf-8"))
+        messages: list[dict] = archive.get("messages", [])  # oldest-first
+    elif lines_path.exists():
+        # Partial / in-progress export: stream the NDJSON workfile instead.
+        # It is newest-first, so reverse for the canonical oldest-first order.
+        messages = [
+            json.loads(ln)
+            for ln in lines_path.read_text(encoding="utf-8").splitlines()
+            if ln.strip()
+        ][::-1]
+    else:
+        raise FileNotFoundError(f"export has no messages.json/jsonl at {export_dir}")
 
     sender_map = _sender_names(messages)
     media_root = export_dir / "media"

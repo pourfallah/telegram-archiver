@@ -321,7 +321,16 @@ class ExportEngine:
     async def _checkpoint(self, export: ChatExport, offset_id: int, processed: int, tracker) -> None:
         speed = tracker.observe(processed)
         total = export.total_messages_est
-        eta = int((total - processed) / speed) if total and speed > 0 and processed < total else None
+        # Telegram returns 2147483647 as "unknown / very large" total —
+        # keep progress as counts + ETA instead of a misleading ~0% bar.
+        if total in (0, 2**31 - 1):
+            total = None
+        eta = None
+        if total and speed > 0 and processed < total:
+            remaining = int((total - processed) / speed)
+            # eta_seconds is INTEGER in Postgres — clamp absurd values so the
+            # checkpoint can't overflow int32 on a large/unknown history.
+            eta = remaining if remaining < 2**31 - 1 else None
         export.messages_processed = processed
 
         async with self._sf() as db:

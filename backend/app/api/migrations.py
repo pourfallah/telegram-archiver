@@ -92,8 +92,10 @@ async def create_migration(
     user: Annotated[UserAccount, Depends(get_current_user)],
 ):
     export = await _owned_export(payload.export_id, db, user)
-    if export.status != "completed":
-        raise HTTPException(status_code=400, detail="Export must be completed before migrating")
+    # Allow migrating a partial/in-progress export for testing: any export that
+    # has messages on disk is eligible, not only completed ones.
+    if not export.export_dir or export.messages_processed <= 0:
+        raise HTTPException(status_code=400, detail="Export has no data yet to migrate")
 
     job = MigrationJob(chat_export_id=export.id, format=payload.format, status="running")
     db.add(job)

@@ -62,12 +62,12 @@ export default function Migration(): JSX.Element {
         </p>
         <form onSubmit={convert} className="flex items-end gap-2">
           <div>
-            <label className="block text-xs text-slate-400">Completed export</label>
+            <label className="block text-xs text-slate-400">Export (any with data — partial OK)</label>
             <select value={exportId} onChange={(e) => setExportId(Number(e.target.value))}
               className="rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm">
               <option value="">Select…</option>
-              {exports_?.filter((x) => x.status === 'completed').map((x) => (
-                <option key={x.id} value={x.id}>{x.chat_title} (#{x.id})</option>
+              {exports_?.filter((x) => x.messages_processed > 0).map((x) => (
+                <option key={x.id} value={x.id}>{x.chat_title} (#{x.id} · {x.status} · {x.messages_processed} msgs)</option>
               ))}
             </select>
           </div>

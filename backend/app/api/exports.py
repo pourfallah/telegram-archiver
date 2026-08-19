@@ -240,3 +240,43 @@ async def download_file(
     if not target.is_file():
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(target, filename=target.name, media_type="application/octet-stream")
+
+
+@router.get("/{export_id}/preview")
+async def preview_export(
+    export_id: int,
+    db: DbSession,
+    user: Annotated[UserAccount, Depends(get_current_user)],
+    limit: int = 100,
+):
+    """First ``limit`` messages of an export (oldest-first) for pre-import review."""
+    from app.models import Message
+
+    limit = max(1, min(limit, 500))
+    export = await _get_owned_export(export_id, db, user)
+    rows = (
+        await db.scalars(
+            select(Message)
+            .where(Message.chat_export_id == export_id)
+            .order_by(Message.message_id.asc())
+            .limit(limit)
+        )
+    ).all()
+    messages = [
+        {
+            "id": r.message_id,
+            "date": r.date.isoformat() if r.date else None,
+            "sender": r.sender_name or r.sender_username or f"user_{r.sender_id}" if r.sender_id else None,
+            "text": r.text,
+            "media": r.media_types,
+            "reply_to": r.reply_to_message_id,
+        }
+        for r in rows
+    ]
+    return {
+        "export_id": export_id,
+        "status": export.status,
+        "total_messages": export.messages_processed,
+        "partial": export.status != "completed",
+        "messages": messages,
+    }
