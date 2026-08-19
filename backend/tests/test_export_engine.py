@@ -309,3 +309,28 @@ async def test_unbundled_entity_resolution_falls_back_to_id(db_engine, db_sessio
     engine = build_engine(db_engine, factory, settings)
     await engine.run(export.id)
     await poll_status(db_session, export.id, "completed")
+
+
+async def test_media_download_writes_files_and_hashes(db_engine, db_session, tmp_path):
+    """Media rows get downloaded to disk with a SHA-256 and status=downloaded."""
+    from sqlalchemy import func
+
+    msgs, chat = build_history(25)
+    factory = FakeExportFactory(messages=msgs, dialogs=[FakeDialog(chat)])
+    settings = Settings(exports_dir=tmp_path / "exports")
+    export, _ = await make_export(db_session, options={"input_peer": {"cls": "Fake", "id": chat.id}})
+    engine = build_engine(db_engine, factory, settings)
+    await engine.run(export.id)
+    await poll_status(db_session, export.id, "completed")
+
+    out = tmp_path / "exports" / "_491234567890" / "Family" / "media"
+    assert (out / "photo").exists() and (out / "document").exists()
+    photo = list((out / "photo").glob("*"))[0]
+    assert photo.is_file() and photo.stat().st_size > 0
+
+    done = await db_session.scalar(
+        select(func.count(MediaFile.id)).where(MediaFile.status == "downloaded")
+    )
+    assert done == 2
+    await db_session.refresh(export)
+    assert export.files_downloaded == 2

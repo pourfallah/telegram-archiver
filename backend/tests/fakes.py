@@ -211,10 +211,10 @@ def fake_photo_media():
     class Photo:
         size = 2048
 
-    class MediaPhoto:  # name matches classify_media's type check
+    class MessageMediaPhoto:  # name matches classify_media's type check
         pass
 
-    media = MediaPhoto()
+    media = MessageMediaPhoto()
     media.photo = Photo()
     media.date = datetime(2024, 1, 1, tzinfo=UTC)
     return media
@@ -229,14 +229,14 @@ def fake_document_media(mime_type="application/pdf", size=1024, attrs=(), filena
     class Attr:  # generic attribute; real names chosen by the caller
         pass
 
-    class MediaDocument:  # name matches classify_media's type check
+    class MessageMediaDocument:  # name matches classify_media's type check
         pass
 
     doc = Document()
     doc.mime_type = mime_type
     doc.size = size
     doc.attributes = list(attrs)
-    media = MediaDocument()
+    media = MessageMediaDocument()
     media.document = doc
     if filename is not None:
         attr = Attr()
@@ -299,6 +299,16 @@ class FakeExportClient(FakeTelegramClient):
     async def get_dialogs(self, limit=None):  # noqa: ARG002
         self.calls.append("get_dialogs")
         return FakeMessagesList(self._dialogs or [FakeDialog(e) for e in self.messages if isinstance(e, FakeChatEntity)])
+
+    async def download_media(self, message, file=None, **kwargs):  # noqa: ARG002
+        """Write fake bytes for a message's media and return the saved path."""
+        from pathlib import Path
+
+        self.calls.append("download_media")
+        dest = Path(file) if file else Path(f"/tmp/msg_{getattr(message, 'id', 0)}.bin")
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(b"fake-media-" + str(getattr(message, "id", 0)).encode())
+        return str(dest)
 
 
 class FakeExportFactory(FakeClientFactory):

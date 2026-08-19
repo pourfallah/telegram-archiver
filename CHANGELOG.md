@@ -7,10 +7,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added (planned)
 
-- Phase 4: Media downloader (concurrency-capped, hashed, retryable).
 - Phase 5: WhatsApp-compatible migration builder, test package builder, import assistant.
 - Phase 6: React dashboard.
 - Phase 7: Full test suite + release.
+
+## [0.4.0] - 2026-08-19
+
+### Added — Phase 4 (media downloader)
+
+- Media downloader (`services/media_downloader.py`): downloads each message's media
+  to `media/<type>/<filename>` while streaming SHA-256, records path + hash + status on
+  the `MediaFile` ledger, concurrency-capped (`media_concurrency`), bounded retries,
+  permanent failures marked for the retry endpoint.
+- Inline integration with the export engine: media is downloaded per batch as the
+  export streams; `files_downloaded` is updated live.
+- Test coverage for on-disk media output + hashed ledger rows (61 tests green).
 
 ## [0.3.0] - 2026-08-19
 

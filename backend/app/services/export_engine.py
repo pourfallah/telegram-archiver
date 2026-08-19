@@ -34,6 +34,7 @@ from app.services.export_writers import (
     SqliteArchiveBuilder,
     assemble_json_archive,
 )
+from app.services.media_downloader import MediaDownloader
 from app.services.telegram_utils import (
     deserialize_input_peer,
     message_to_dict,
@@ -71,6 +72,7 @@ class ExportEngine:
         sleep: Any = asyncio.sleep,
         log: Any = logger,
         batch_hook=None,
+        downloader=None,
     ) -> None:
         self._settings = settings
         self._sf = session_factory
@@ -79,6 +81,7 @@ class ExportEngine:
         self._sleep = sleep
         self._log = log
         self._batch_hook = batch_hook  # test hook: async callable(processed) or None
+        self._downloader = downloader or MediaDownloader(settings, session_factory)
 
     # ------------------------------------------------------------ lifecycle
 
@@ -164,6 +167,7 @@ class ExportEngine:
         offset_id = export.checkpoint_offset_id or 0
         processed = export.messages_processed
         processed_before = processed
+        include_media = export.options.get("include_media", True)
 
         json_lines = JsonLineWriter(dirs / "messages.jsonl")
         json_lines.open(resume_count=processed_before)
@@ -190,6 +194,9 @@ class ExportEngine:
                 # transaction, so a crash between batches never re-processes
                 # already-committed messages on resume.
                 await self._persist_batch(export, rows, media_rows, offset_id, processed)
+
+                if include_media and rows:
+                    await self._downloader.download_batch(client, export, dirs, batch, rows)
 
                 if self._batch_hook is not None:
                     await self._batch_hook(processed, export)
