@@ -344,7 +344,7 @@ async def list_target_chats(
     if account.status != "active":
         raise HTTPException(status_code=400, detail="Account is not logged in")
 
-    client, _release = await manager.acquire_client(account)
+    client, release = await manager.acquire_client(account)
 
     try:
         dialogs = await client.get_dialogs()
@@ -366,6 +366,8 @@ async def list_target_chats(
                 message_count=getattr(dialog, "unread_count", 0),
                 is_marked_unread=bool(getattr(dialog, "unread_mark", False)),
             ))
+        # Sort by title for consistent UI
+        chats.sort(key=lambda c: (c.title or "").lower())
         return TargetChatsResponse(chats=chats)
     finally:
-        pass  # release handled by caller context
+        await release()
