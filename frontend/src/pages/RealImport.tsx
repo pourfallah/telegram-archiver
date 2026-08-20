@@ -124,7 +124,7 @@ export default function RealImport(): JSX.Element {
     setLoading(true)
     try {
       const res = await post<{ allowed: boolean; confirm_text: string; error_code: string | null; error_message: string | null; peer: any }>(
-        `/api/import/${sourceAccountId}/validate-peer`,
+        `/api/import/${targetAccountId}/validate-peer`,
         {
           export_id: exportId,
           contact_identifier: targetChat.username || targetChat.id.toString(),

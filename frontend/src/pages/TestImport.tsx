@@ -23,15 +23,15 @@ export default function TestImport(): JSX.Element {
   const sourceExports = exports?.filter((e) => e.account_id === sourceAccountId && e.messages_processed > 0) || []
 
   const validatePeer = async () => {
-    if (!sourceAccountId || !contactIdentifier) {
-      setError('Select source account and enter contact identifier')
+    if (!targetAccountId || !contactIdentifier) {
+      setError('Select target account and enter contact identifier')
       return
     }
     setError(null)
     setPeerValidation(null)
     setLoading(true)
     try {
-      const res = await post<PeerValidationResult>(`/api/import/${sourceAccountId}/validate-peer`, {
+      const res = await post<PeerValidationResult>(`/api/import/${targetAccountId}/validate-peer`, {
         export_id: exportId,
         contact_identifier: contactIdentifier,
         count,
