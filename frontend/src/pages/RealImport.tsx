@@ -20,7 +20,7 @@ export default function RealImport(): JSX.Element {
 
   // Step 3: Select target chat
   const [targetChat, setTargetChat] = useState<TargetChat | null>(null)
-  const { data: targetChats } = useQuery({
+  const { data: targetChats, isLoading: isLoadingChats } = useQuery({
     queryKey: ['targetChats', targetAccountId],
     queryFn: () => api<{ chats: TargetChat[] }>(`/api/import/${targetAccountId}/target-chats`),
     enabled: !!targetAccountId,
@@ -283,8 +283,8 @@ export default function RealImport(): JSX.Element {
         return (
           <section className="rounded-xl border border-slate-800 bg-slate-900 p-4 space-y-4">
             <h2 className="font-medium">Step 3: Select Target Chat (Existing A↔B Peer)</h2>
-            {loading && <p>Loading chats…</p>}
-            {!loading && targetChats && (
+            {isLoadingChats && <p>Loading chats…</p>}
+            {!isLoadingChats && targetChats && (
               <div className="space-y-2 max-h-96 overflow-auto">
                 {targetChats.chats.map((chat) => (
                   <button
