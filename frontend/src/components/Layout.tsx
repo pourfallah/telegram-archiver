@@ -7,6 +7,7 @@ const links = [
   { to: '/exports', label: 'Exports' },
   { to: '/migration', label: 'Migration' },
   { to: '/test-import', label: 'Test Import' },
+  { to: '/real-import', label: 'Real Import' },
   { to: '/import', label: 'Import Assistant' },
 ]
 

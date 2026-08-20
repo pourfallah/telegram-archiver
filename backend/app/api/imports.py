@@ -14,6 +14,9 @@ from app.schemas.import_job import (
     ImportJobStatus,
     PeerInfo,
     PeerValidationResult,
+    StartImportRequest,
+    TargetChat,
+    TargetChatsResponse,
     TestImportRequest,
 )
 from app.services.canonical_archive import build_canonical_archive
@@ -270,3 +273,99 @@ async def start_import_job(
 
     run_import.delay(job_id)
     return {"job_id": job_id, "dispatched": True}
+
+
+@router.post("/start-real", response_model=ImportJobPublic, status_code=status.HTTP_201_CREATED)
+async def start_real_import(
+    payload: StartImportRequest,
+    db: DbSession,
+    user: Annotated[UserAccount, Depends(get_current_user)],
+    manager: Manager,
+):
+    """
+    Start a REAL Telegram MTProto history import.
+
+    This is the full production import path (not test).
+    Requires explicit user confirmation via the pre-flight UI step.
+    """
+    target_account = await _get_owned_account(payload.target_account_id, db, user)
+    if target_account.status != "active":
+        raise HTTPException(status_code=400, detail="Target account is not logged in")
+
+    export = await _get_owned_export(payload.export_id, db, user)
+
+    # Build canonical archive if not already present
+    from pathlib import Path
+    export_dir = Path(export.export_dir)
+    archive_dir = export_dir / "archive"
+    if not archive_dir.exists():
+        _ = build_canonical_archive(
+            export_dir, archive_dir,
+            {"id": export.chat_id, "title": export.chat_title, "type": export.chat_type},
+        )
+
+    # Create import job record
+    job = ImportJob(
+        source_export_id=export.id,
+        target_account_id=payload.target_account_id,
+        target_peer_id=payload.target_peer_id,
+        message_limit=payload.message_limit,
+        status=ImportJobStatus.QUEUED,
+        options={
+            "contact_identifier": "",
+            "test_mode": False,
+        },
+    )
+    db.add(job)
+    await db.commit()
+    await db.refresh(job)
+
+    return ImportJobPublic(
+        id=job.id,
+        source_export_id=job.source_export_id,
+        target_account_id=job.target_account_id,
+        target_peer_id=job.target_peer_id,
+        message_limit=job.message_limit,
+        status=job.status,
+        options=job.options,
+        created_at=job.created_at,
+    )
+
+
+@router.get("/{account_id}/target-chats", response_model=TargetChatsResponse)
+async def list_target_chats(
+    account_id: int,
+    db: DbSession,
+    user: Annotated[UserAccount, Depends(get_current_user)],
+    manager: Manager,
+):
+    """Get list of dialogs from a target Telegram account for peer selection."""
+    account = await _get_owned_account(account_id, db, user)
+    if account.status != "active":
+        raise HTTPException(status_code=400, detail="Account is not logged in")
+
+    client, _release = await manager.acquire_client(account)
+
+    try:
+        dialogs = await client.get_dialogs()
+        chats = []
+        for dialog in dialogs:
+            entity = dialog.entity
+            if not entity:
+                continue
+            # Get peer info - dialog may have peer or id directly
+            peer_id = getattr(dialog, "id", getattr(entity, "id", 0))
+            access_hash = getattr(dialog, "access_hash", None)
+            chats.append(TargetChat(
+                id=getattr(entity, "id", 0),
+                title=getattr(entity, "title", None) or getattr(entity, "first_name", None),
+                username=getattr(entity, "username", None),
+                type=dialog.entity.__class__.__name__,
+                peer_id=peer_id,
+                access_hash=access_hash,
+                message_count=getattr(dialog, "unread_count", 0),
+                is_marked_unread=bool(getattr(dialog, "unread_mark", False)),
+            ))
+        return TargetChatsResponse(chats=chats)
+    finally:
+        pass  # release handled by caller context

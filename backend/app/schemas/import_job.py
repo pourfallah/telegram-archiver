@@ -65,3 +65,25 @@ class ImportJobPublic(BaseModel):
     finished_at: datetime | None = None
     error: str | None = None
     progress: dict | None = None
+
+
+class TargetChat(BaseModel):
+    id: int
+    title: str | None = None
+    username: str | None = None
+    type: str
+    peer_id: int
+    access_hash: int | None = None
+    message_count: int | None = None
+    is_marked_unread: bool = False
+
+
+class TargetChatsResponse(BaseModel):
+    chats: list[TargetChat]
+
+
+class StartImportRequest(BaseModel):
+    export_id: int
+    target_account_id: int
+    target_peer_id: int
+    message_limit: int = Field(default=10, ge=1, le=1000)

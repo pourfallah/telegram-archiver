@@ -112,7 +112,7 @@ export default function TestImport(): JSX.Element {
             <label className="block text-xs text-slate-400">Contact identifier (username/phone/id of A)</label>
             <input value={contactIdentifier} onChange={(e) => setContactIdentifier(e.target.value)}
               className="rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm"
-              placeholder="@username or +1234567890 or 123456789" />
+              placeholder="@username or +123****7890 or 123456789" />
           </div>
           <div>
             <label className="block text-xs text-slate-400">Messages to import</label>

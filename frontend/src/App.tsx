@@ -8,6 +8,7 @@ import Exports from './pages/Exports'
 import Migration from './pages/Migration'
 import ImportAssistant from './pages/ImportAssistant'
 import TestImport from './pages/TestImport'
+import RealImport from './pages/RealImport'
 import ImportJobDetail from './pages/ImportJobDetail'
 
 function RequireAuth({ children }: { children: JSX.Element }): JSX.Element {
@@ -32,6 +33,7 @@ export default function App(): JSX.Element {
         <Route path="/migration" element={<Migration />} />
         <Route path="/import" element={<ImportAssistant />} />
         <Route path="/test-import" element={<TestImport />} />
+        <Route path="/real-import" element={<RealImport />} />
         <Route path="/import/jobs/:id" element={<ImportJobDetail />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

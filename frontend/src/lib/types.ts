@@ -157,3 +157,26 @@ export interface ImportJobPublic {
   error: string | null
   progress: Record<string, unknown> | null
 }
+
+
+export interface TargetChat {
+  id: number
+  title: string | null
+  username: string | null
+  type: string
+  peer_id: number
+  access_hash: number | null
+  message_count: number | null
+  is_marked_unread: boolean
+}
+
+export interface TargetChatsResponse {
+  chats: TargetChat[]
+}
+
+export interface StartImportRequest {
+  export_id: number
+  target_account_id: number
+  target_peer_id: number
+  message_limit: number
+}
