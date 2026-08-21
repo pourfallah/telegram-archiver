@@ -1,14 +1,5 @@
-"""Celery task for real Telegram MTProto history import.
+"""Celery task for real Telegram MTProto history import."""
 
-Implements the full import protocol:
-1. Validate peer (checkHistoryImportPeer)
-2. Parse import head (checkHistoryImport)
-3. Initialize import (initHistoryImport) -> import_id
-4. Upload each media (uploadImportedMedia) -> tokens
-5. Splice media tokens into import file
-6. Start import (startHistoryImport)
-7. Verify results
-"""
 from __future__ import annotations
 
 import logging
@@ -44,14 +35,16 @@ def _build_input_media(info: dict):
 
     mime = info.get("mime") or "application/octet-stream"
     media_type = info.get("type") or "document"
+    file_path = info.get("path")
 
     if media_type == "photo" or mime.startswith("image/"):
-        return InputMediaUploadedPhoto()
+        return InputMediaUploadedPhoto(file=file_path)
     else:
         # Document with filename attribute
         return InputMediaUploadedDocument(
             mime_type=mime,
-            attributes=[DocumentAttributeFilename(file_name=info.get("path").name)],
+            file=file_path,
+            attributes=[DocumentAttributeFilename(file_name=file_path.name if file_path else "")],
         )
 
 
@@ -208,7 +201,6 @@ async def _run_import_async(job_id: int) -> dict:
                     return {"error": job.error}
 
             # Phase 5b: Splice media tokens into import file
-            # We need to rebuild the import file with actual MessageMedia tokens
             job.progress = {"phase": "media_splicing", "uploaded": media_count, "total": media_count}
             await db.commit()
 

@@ -1,7 +1,7 @@
 """Import job records (real Telegram MTProto import lifecycle)."""
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, func, BigInteger
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -33,7 +33,7 @@ class ImportJob(Base):
     progress: Mapped[dict | None] = mapped_column(JSON)
 
     # import_id returned by initHistoryImport
-    import_id: Mapped[int | None] = mapped_column(Integer)
+    import_id: Mapped[int | None] = mapped_column(BigInteger)
 
     error: Mapped[str | None] = mapped_column(String(1024))
 
