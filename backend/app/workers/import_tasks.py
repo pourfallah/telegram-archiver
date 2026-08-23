@@ -25,27 +25,28 @@ def _guess_mime(path: Path) -> str:
     return mime or "application/octet-stream"
 
 
-def _build_input_media(info: dict):
-    """Build InputMedia for uploadImportedMedia from media info."""
+async def _build_input_media(client, info: dict):
+    """Build InputMedia for uploadImportedMedia from media info.
+
+    The file must first be uploaded to Telegram to obtain an InputFile handle.
+    """
     from telethon.tl.types import (
         DocumentAttributeFilename,
         InputMediaUploadedDocument,
         InputMediaUploadedPhoto,
     )
 
+    handle = await client.upload_file(info["path"], file_name=info["path"].name)
     mime = info.get("mime") or "application/octet-stream"
     media_type = info.get("type") or "document"
-    file_path = info.get("path")
 
     if media_type == "photo" or mime.startswith("image/"):
-        return InputMediaUploadedPhoto(file=file_path)
-    else:
-        # Document with filename attribute
-        return InputMediaUploadedDocument(
-            mime_type=mime,
-            file=file_path,
-            attributes=[DocumentAttributeFilename(file_name=file_path.name if file_path else "")],
-        )
+        return InputMediaUploadedPhoto(file=handle)
+    return InputMediaUploadedDocument(
+        file=handle,
+        mime_type=mime,
+        attributes=[DocumentAttributeFilename(file_name=info["path"].name)],
+    )
 
 
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=60)
@@ -187,9 +188,10 @@ async def _run_import_async(job_id: int) -> dict:
                 await db.commit()
 
                 try:
-                    # Upload the media file
+                    # Upload the media file (first to Telegram, then attach to import)
+                    media = await _build_input_media(client, info)
                     token = await importer.upload_imported_media(
-                        peer, import_id, filename, _build_input_media(info)
+                        peer, import_id, filename, media
                     )
                     uploaded_tokens[filename] = token
                     logger.info(f"Uploaded media {filename}: {token}")
@@ -200,20 +202,10 @@ async def _run_import_async(job_id: int) -> dict:
                     await release()
                     return {"error": job.error}
 
-            # Phase 5b: Splice media tokens into import file
+            # Phase 5b: Media uploaded — Telegram matches tokens to the import
+            # file by filename (the <attached: filename> lines), no splicing needed.
             job.progress = {"phase": "media_splicing", "uploaded": media_count, "total": media_count}
             await db.commit()
-
-            # Rebuild import file with actual tokens
-            import_file_with_tokens = export_dir / "import" / "import_with_tokens.txt"
-            _ = build_import_file(
-                export_dir, import_file_with_tokens, limit=limit, sender_map=None
-            )
-            # Note: In reality, the media tokens must be embedded in the file.
-            # The exact format is Telegram-internal. For now, we proceed with
-            # the original file and uploaded tokens tracked separately.
-            # The startHistoryImport will use the import_id and Telegram
-            # will match media by filename from the uploaded tokens.
 
             # Phase 6: Start import
             job.status = "starting_import"
@@ -253,9 +245,11 @@ async def _run_import_async(job_id: int) -> dict:
                 from app.services.telegram_utils import message_to_dict
                 target_dicts = [message_to_dict(m) for m in target_list]
 
-                # Run verification
+                # Run verification (only the imported slice of the source)
                 export_dir = Path(export.export_dir)
-                report = run_verification(export_dir / "archive", target_dicts)
+                report = run_verification(
+                    export_dir / "archive", target_dicts, imported_count=limit
+                )
 
                 # Write report
                 report_dir = export_dir / "verification"

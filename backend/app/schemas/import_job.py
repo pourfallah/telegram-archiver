@@ -87,3 +87,4 @@ class StartImportRequest(BaseModel):
     target_account_id: int
     target_peer_id: int
     message_limit: int = Field(default=10, ge=1, le=1000)
+    contact_identifier: str = ""

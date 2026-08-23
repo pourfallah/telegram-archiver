@@ -182,8 +182,9 @@ async def start_test_import(
     await db.commit()
     await db.refresh(job)
 
-    # TODO: dispatch Celery task to run actual import
-    # for now return the job; worker picks it up
+    # Dispatch the Celery task so the worker actually runs the import
+    from app.workers.import_tasks import run_import
+    run_import.delay(job.id)
 
     return ImportJobPublic(
         id=job.id,
@@ -312,13 +313,17 @@ async def start_real_import(
         message_limit=payload.message_limit,
         status=ImportJobStatus.QUEUED,
         options={
-            "contact_identifier": "",
+            "contact_identifier": payload.contact_identifier,
             "test_mode": False,
         },
     )
     db.add(job)
     await db.commit()
     await db.refresh(job)
+
+    # Dispatch the Celery task so the worker actually runs the import
+    from app.workers.import_tasks import run_import
+    run_import.delay(job.id)
 
     return ImportJobPublic(
         id=job.id,

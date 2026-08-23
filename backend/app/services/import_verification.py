@@ -21,12 +21,15 @@ def _normalize_text(text: str | None) -> str:
 
 
 def _msg_key(m: dict) -> tuple:
-    """Deterministic key for matching messages (sender + text + date prefix)."""
-    sender = m.get("sender") or {}
-    sid = sender.get("id")
+    """Deterministic key for matching messages.
+
+    Sender-agnostic by design: Telegram's history import re-maps senders to
+    the importing account, so original sender IDs cannot be preserved.
+    Matching is (date-only, normalized text prefix).
+    """
     date = str(m.get("date") or "")[:10]  # date only
     text = _normalize_text(m.get("text") or "")
-    return (sid, date, text[:80])
+    return (date, text[:80])
 
 
 class ImportVerification:
@@ -154,9 +157,16 @@ class ImportVerification:
 def run_verification(
     source_archive_dir: Path,
     target_chat_messages: list[dict],
+    imported_count: int | None = None,
 ) -> dict[str, Any]:
-    """High-level verification entry point."""
+    """High-level verification entry point.
+
+    When ``imported_count`` is given (a test/partial import), only the LAST
+    N messages of the source archive were imported — verify just that slice.
+    """
     source_msgs = load_canonical_messages(source_archive_dir)
+    if imported_count is not None and imported_count < len(source_msgs):
+        source_msgs = source_msgs[-imported_count:]
     verifier = ImportVerification(source_msgs, target_chat_messages)
     return verifier.compare()
 

@@ -30,6 +30,11 @@ from typing import Any
 
 
 def _load_messages(export_dir: Path) -> list[dict]:
+    # Canonical archive layout: <archive>/messages/messages.ndjson (oldest-first)
+    ndjson_path = export_dir / "messages" / "messages.ndjson"
+    if not ndjson_path.exists():
+        # Fallbacks for older layouts
+        ndjson_path = export_dir / "messages.ndjson"
     msgs_path = export_dir / "messages.json"
     lines_path = export_dir / "messages.jsonl"
     if msgs_path.exists():
@@ -42,7 +47,13 @@ def _load_messages(export_dir: Path) -> list[dict]:
             if ln.strip()
         ]
         return messages[::-1]  # jsonl is newest-first; canonical is oldest-first
-    raise FileNotFoundError(f"export has no messages.json/jsonl at {export_dir}")
+    if ndjson_path.exists():
+        return [
+            json.loads(ln)
+            for ln in ndjson_path.read_text(encoding="utf-8").splitlines()
+            if ln.strip()
+        ]
+    raise FileNotFoundError(f"export has no messages.json/jsonl/ndjson at {export_dir}")
 
 
 def _iso(value) -> str | None:
