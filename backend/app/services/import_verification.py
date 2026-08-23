@@ -163,12 +163,62 @@ def run_verification(
 
     When ``imported_count`` is given (a test/partial import), only the LAST
     N messages of the source archive were imported — verify just that slice.
+
+    The report distinguishes three timestamps per matched message:
+      - source_date:        original timestamp from the canonical archive
+      - target_visible:     server-assigned message.date (import moment)
+      - target_import_meta: fwd_from.date (historical date Telegram preserved)
     """
     source_msgs = load_canonical_messages(source_archive_dir)
     if imported_count is not None and imported_count < len(source_msgs):
         source_msgs = source_msgs[-imported_count:]
     verifier = ImportVerification(source_msgs, target_chat_messages)
-    return verifier.compare()
+    report = verifier.compare()
+
+    # Per-message timestamp comparison table (source vs visible vs metadata)
+    rows = []
+    historical_meta_preserved = 0
+    visible_matches_source = 0
+    for key, src in verifier.source_by_key.items():
+        tgt = verifier.target_by_key.get(key)
+        if tgt is None:
+            continue
+        src_date = str(src.get("date") or "")
+        tgt_fwd = tgt.get("fwd_from") or {}
+        meta_date = str(tgt.get("target_import_meta_date") or tgt_fwd.get("date") or "")
+        vis_date = str(tgt.get("date") or "")
+        if meta_date[:10] == src_date[:10]:
+            historical_meta_preserved += 1
+        if src_date[:16] == vis_date[:16]:
+            visible_matches_source += 1
+        rows.append({
+            "key": list(key),
+            "source_date": src_date,
+            "target_visible_date": vis_date,
+            "target_import_meta_date": meta_date,
+            "visible_equals_source": src_date[:16] == vis_date[:16],
+            "meta_preserves_history": bool(meta_date),
+        })
+
+    report["timestamp_analysis"] = {
+        "definitions": {
+            "source_date": "original timestamp in canonical archive",
+            "target_visible_date": "message.date assigned by Telegram at import",
+            "target_import_meta_date": "fwd_from.date — historical timestamp Telegram preserved as metadata",
+        },
+        "matched_messages": len(rows),
+        "historical_metadata_preserved": historical_meta_preserved,
+        "visible_equals_source": visible_matches_source,
+        "placement_note": (
+            "Telegram assigns imported messages a server-side date equal to the "
+            "import moment; the original timestamp survives only as fwd_from "
+            "metadata. This is a documented Telegram limitation."
+            if visible_matches_source < len(rows) and rows else
+            "Visible dates match sources." if not rows else ""
+        ),
+        "rows": rows,
+    }
+    return report
 
 
 def write_report(report: dict, out_dir: Path) -> Path:

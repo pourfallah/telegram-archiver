@@ -65,6 +65,17 @@ Detailed design: [docs/architecture.md](docs/architecture.md).
 
 Telegram's platform imposes hard limits that this product documents rather than fakes:
 
+0. **Imported-message timestamps — what is and is not restored.** The MTProto
+   history-import API (`messages.initHistoryImport` etc.) takes **no date input**.
+   After a real E2E import we verified:
+   - **A. Original source timestamp** — preserved in the canonical archive (always).
+   - **B. Imported timestamp metadata** — Telegram keeps the original date in each
+     message's `fwd_from.date` with `imported=true`. ✅ restored.
+   - **C. Visible timeline date** — Telegram assigns the *import moment* as the
+     server-side `message.date`; clients display this on the bubble. ❌ not
+     restorable by any official API (see docs/RECOVERY_FIDELITY.md and
+     docs/TIMESTAMP_IMPORT_FORENSIC_AUDIT.md). We do **not** claim "original dates
+     are restored" in the visible timeline, because they are not.
 1. **No arbitrary history import.** There is no public API to restore/backfill messages
    into a Telegram chat. Telegram's *only* official import path (Telegram Desktop →
    Settings → Advanced → *Import from…*) accepts **WhatsApp, Line and KakaoTalk** export

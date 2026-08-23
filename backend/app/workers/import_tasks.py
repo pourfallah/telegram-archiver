@@ -241,9 +241,22 @@ async def _run_import_async(job_id: int) -> dict:
                     target_msgs = await client.get_messages(peer, limit=1000)
                     target_list = list(target_msgs)
 
-                # Convert to dict format
+                # Convert to dict format + capture fwd_from (imported) metadata
                 from app.services.telegram_utils import message_to_dict
-                target_dicts = [message_to_dict(m) for m in target_list]
+                target_dicts = []
+                for m in target_list:
+                    d = message_to_dict(m)
+                    fwd = getattr(m, "fwd_header", None)
+                    if fwd is None:
+                        fwd = getattr(m, "fwd_from", None)
+                    if fwd is not None:
+                        fdate = getattr(fwd, "date", None)
+                        d["fwd_from"] = {
+                            "imported": bool(getattr(fwd, "imported", False)),
+                            "date": fdate.isoformat() if fdate else None,
+                            "from_name": getattr(fwd, "from_name", None),
+                        }
+                    target_dicts.append(d)
 
                 # Run verification (only the imported slice of the source)
                 export_dir = Path(export.export_dir)
@@ -251,9 +264,50 @@ async def _run_import_async(job_id: int) -> dict:
                     export_dir / "archive", target_dicts, imported_count=limit
                 )
 
-                # Write report
+                # Write verification report
                 report_dir = export_dir / "verification"
                 write_report(report, report_dir)
+
+                # RECOVERY_FIDELITY_REPORT.html — fidelity scorecard
+                try:
+                    from app.services.fidelity_report import build_fidelity_report
+                    build_fidelity_report(report, export_dir / "verification")
+                except Exception:  # noqa: BLE001 — report is additive
+                    logger.warning("Fidelity report generation failed", exc_info=True)
+
+                # IMPORT DEBUG LOG — reproducibility record for this job
+                import hashlib
+                debug_log = {
+                    "job_id": job_id,
+                    "source_archive": str(Path(export.export_dir) / "archive"),
+                    "target_account": account.phone,
+                    "target_peer": getattr(entity, "username", None)
+                    or getattr(entity, "id", None),
+                    "source_message_count": stats["messages"],
+                    "media_count_declared": media_count,
+                    "media_uploaded": len(uploaded_tokens),
+                    "import_file_sha256": hashlib.sha256(
+                        import_file.read_bytes()
+                    ).hexdigest(),
+                    "import_file_size_bytes": import_file.stat().st_size,
+                    "first_source_timestamp": stats["date_min"],
+                    "last_source_timestamp": stats["date_max"],
+                    "checkHistoryImport_result": fmt_check,
+                    "initHistoryImport_result": {"ok": True},
+                    "import_id": import_id,
+                    "startHistoryImport_result": True,
+                    "target_message_retrieval_count": len(target_list),
+                    "verification_overall": report.get("overall"),
+                    "timestamp_analysis": report.get("timestamp_analysis", {}).get(
+                        "historical_metadata_preserved"
+                    ),
+                }
+                import json as _json
+                (export_dir / "verification" / "IMPORT_DEBUG_LOG.json").write_text(
+                    _json.dumps(debug_log, ensure_ascii=False, indent=2, default=str),
+                    encoding="utf-8",
+                )
+                logger.info("Import job %s debug log: %s", job_id, debug_log)
 
                 prog = {
                     "phase": "completed",
