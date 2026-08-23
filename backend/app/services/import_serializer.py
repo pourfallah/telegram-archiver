@@ -17,7 +17,7 @@ file with media placeholders and the worker handles token splicing.
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -25,7 +25,18 @@ from typing import Any
 # Telegram import date format per docs: DD.MM.YYYY HH:MM (dot separator)
 # WhatsApp export uses DD/MM/YYYY, HH:MM (slash). Telegram accepts both.
 # We'll use the dot format as it's the documented Telegram preference.
-def _format_ts(dt: str | datetime | None) -> str:
+#
+# TIMEZONE SEMANTICS (verified by controlled experiment 2026-08-23):
+# The importer parses naive "DD.MM.YYYY HH:MM" strings in the TARGET ACCOUNT's
+# local timezone (observed UTC+3:30 for the test account) and stores
+# date = parsed_wall_clock - tz_offset. Therefore, to make the visible timeline
+# show the TRUE historical instant, we must convert source UTC timestamps to the
+# target timezone BEFORE writing them. build_import_file takes `tz_offset_minutes`
+# (offset of the target account from UTC, e.g. 210 for UTC+3:30). When unknown,
+# pass None and times are written as-is (UTC wall clock).
+def _format_ts(
+    dt: str | datetime | None, tz_offset_minutes: int | None = None
+) -> str:
     if dt is None:
         return "01.01.1970 00:00"
     if isinstance(dt, str):
@@ -39,6 +50,10 @@ def _format_ts(dt: str | datetime | None) -> str:
                 return "01.01.1970 00:00"
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=UTC)
+    if tz_offset_minutes is not None:
+        # shift true instant into the target account's local wall clock
+        dt = dt + timedelta(minutes=tz_offset_minutes)
+        dt = dt.replace(tzinfo=None)
     return dt.strftime("%d.%m.%Y %H:%M")
 
 
@@ -58,9 +73,14 @@ def build_import_file(
     out_file: Path,
     limit: int | None = None,
     sender_map: dict[int, str] | None = None,
+    tz_offset_minutes: int | None = None,
 ) -> dict[str, Any]:
     """
     Build the import text file from a canonical archive or export.
+
+    tz_offset_minutes: UTC offset of the TARGET account (e.g. 210 = UTC+3:30).
+    The Telegram importer parses naive timestamps in the target's local zone, so
+    shifting source instants by this offset makes visible dates match history.
 
     Returns stats: {messages, media_refs, users, date_min, date_max}
     """
@@ -113,7 +133,7 @@ def build_import_file(
 
     with out_file.open("w", encoding="utf-8") as f:
         for m in messages:
-            ts = _format_ts(m.get("date"))
+            ts = _format_ts(m.get("date"), tz_offset_minutes)
             sender = m.get("sender") or {}
             sid = sender.get("id")
             name = sender_map.get(sid) if sid is not None else sender.get("name") or "Unknown"

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import mimetypes
 from pathlib import Path
@@ -120,7 +121,30 @@ async def _run_import_async(job_id: int) -> dict:
             import_file.parent.mkdir(parents=True, exist_ok=True)
 
             limit = job.message_limit
-            stats = build_import_file(export_dir, import_file, limit=limit)
+
+            # Detect the target account's UTC offset from a live message date:
+            # Telegram returns message.date in the account's local tz as naive
+            # datetimes via Telethon (tz-naive when tz_offset unknown). Compare a
+            # known recent message's server epoch vs its rendered wall clock.
+            tz_offset_minutes = job.options.get("tz_offset_minutes")
+            if tz_offset_minutes is None:
+                try:
+                    probe = await client.get_messages(peer, limit=1)
+                    first = probe[0] if probe else None
+                    mdate = getattr(first, "date", None) if first else None
+                    if mdate is not None and mdate.tzinfo is not None:
+                        tz_offset_minutes = int(mdate.utcoffset().total_seconds() // 60)
+                    else:
+                        tz_offset_minutes = None
+                except Exception:  # noqa: BLE001 — best effort
+                    tz_offset_minutes = None
+
+            stats = build_import_file(
+                export_dir,
+                import_file,
+                limit=limit,
+                tz_offset_minutes=tz_offset_minutes,
+            )
 
             # Phase 3: checkHistoryImport
             job.progress = {"phase": "check_import_format"}
@@ -230,16 +254,30 @@ async def _run_import_async(job_id: int) -> dict:
 
             # Re-read target chat messages for verification
             try:
-                target_msgs_result = await client.get_messages(peer, limit=0)
-                total = getattr(target_msgs_result, "total", None)
-                if total and total < 5000:
-                    # Fetch all if reasonable
-                    target_msgs = await client.get_messages(peer, limit=total)
-                    target_list = list(target_msgs)
-                else:
-                    # Fetch recent batch for spot check
-                    target_msgs = await client.get_messages(peer, limit=1000)
-                    target_list = list(target_msgs)
+                # Telegram materializes the historical dates ~1-3 minutes after
+                # startHistoryImport returns. Poll until the newest imported
+                # message leaves its provisional import-time stamp (or timeout).
+                async def _fetch_target():
+                    res = await client.get_messages(peer, limit=0)
+                    total_n = getattr(res, "total", None)
+                    if total_n and total_n < 5000:
+                        got = await client.get_messages(peer, limit=total_n)
+                        return list(got)
+                    got = await client.get_messages(peer, limit=1000)
+                    return list(got)
+
+                target_list = await _fetch_target()
+                for _ in range(6):  # up to ~3 min of polling
+                    recent = [m for m in target_list if getattr(m, "fwd_from", None)
+                              and getattr(m.fwd_from, "imported", False)]
+                    if not recent:
+                        break
+                    sample = max(recent, key=lambda m: m.id)
+                    if abs((sample.date - __import__("datetime").datetime.now(
+                            __import__("datetime").timezone.utc)).total_seconds()) > 300:
+                        break  # already historical
+                    await asyncio.sleep(30)
+                    target_list = await _fetch_target()
 
                 # Convert to dict format + capture fwd_from (imported) metadata
                 from app.services.telegram_utils import message_to_dict
