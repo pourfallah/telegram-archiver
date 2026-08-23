@@ -83,7 +83,17 @@ def build_import_file(
         ]
         messages = messages[::-1]  # ndjson is newest-first; import wants oldest-first
 
+    # D-1 fix: guarantee strict ascending order (timestamp, then source id)
+    def _sort_key(m: dict):
+        dt = m.get("date") or ""
+        if isinstance(dt, str):
+            dt = dt.replace("Z", "+00:00")
+        return (str(dt), int(m.get("id") or 0))
+
+    messages = sorted(messages, key=_sort_key)
+
     if limit:
+        # Take the OLDEST N messages (the head of history), not the newest.
         messages = messages[:limit]
 
     # Build sender map if not provided
