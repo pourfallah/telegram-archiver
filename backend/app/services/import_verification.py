@@ -23,21 +23,14 @@ def _normalize_text(text: str | None) -> str:
 def _msg_key(m: dict) -> tuple:
     """Deterministic key for matching messages.
 
-    Sender-agnostic by design: Telegram's history import re-maps senders to
-    the importing account, so original sender IDs cannot be preserved.
-    Matching is (date-only, normalized text prefix).
-
-    The date used is the TRUE historical instant: for an imported message this
-    is the fwd_from.date metadata (Telegram preserves it there even though the
-    visible message.date may still be provisional/import-time before
-    materialization). Source messages use their own date.
+    Sender- and date-agnostic: Telegram's history import re-maps senders, and
+    imported messages show a provisional import-time date until server
+    materialization (the true historical instant appears later as
+    fwd_from.date). The only reliable, stable signal is the normalized TEXT, so
+    matching uses it. Timestamps and senders are compared separately.
     """
-    date = str(m.get("date") or "")[:10]
-    fwd = m.get("fwd_from") or {}
-    if fwd.get("date"):
-        date = str(fwd["date"])[:10]
     text = _normalize_text(m.get("text") or "")
-    return (date, text[:80])
+    return (text[:80],)
 
 
 class ImportVerification:
@@ -46,8 +39,6 @@ class ImportVerification:
     def __init__(self, source_messages: list[dict], target_messages: list[dict]):
         self.source = source_messages
         self.target = target_messages
-        self.source_by_key = {_msg_key(m): m for m in source_messages}
-        self.target_by_key = {_msg_key(m): m for m in target_messages}
 
     def compare(self) -> dict[str, Any]:
         matched = 0
@@ -70,16 +61,25 @@ class ImportVerification:
             "media_summary": {},
         }
 
-        # Check each source message has a match in target
-        for key, src in self.source_by_key.items():
-            tgt = self.target_by_key.get(key)
-            if tgt is None:
+        # Multiset of target texts (handle duplicate messages).
+        from collections import Counter
+
+        target_texts: Counter[str] = Counter(_normalize_text(m.get("text") or "") for m in self.target)
+        target_by_text: dict[str, dict] = {}
+        for m in self.target:
+            tk = _normalize_text(m.get("text") or "")
+            target_by_text.setdefault(tk, m)
+
+        for src in self.source:
+            stk = _normalize_text(src.get("text") or "")
+            if target_texts.get(stk, 0) <= 0:
                 details["missing_in_target"].append({
-                    "source_key": key,
+                    "source_key": stk[:80],
                     "source_preview": src.get("text", "")[:80],
                 })
                 continue
-
+            target_texts[stk] -= 1
+            tgt = target_by_text[stk]
             matched += 1
 
             # Sender
@@ -87,7 +87,7 @@ class ImportVerification:
             tgt_sender = (tgt.get("sender") or {}).get("id")
             if src_sender != tgt_sender:
                 details["sender_mismatches"].append({
-                    "key": key,
+                    "key": stk,
                     "source_sender": src_sender,
                     "target_sender": tgt_sender,
                 })
@@ -100,7 +100,7 @@ class ImportVerification:
             tgt_date = str(tgt_fwd.get("date") or tgt.get("date") or "")
             if src_date[:16] != tgt_date[:16]:  # compare to minute
                 details["timestamp_mismatches"].append({
-                    "key": key,
+                    "key": stk,
                     "source": src_date,
                     "target": tgt_date,
                 })
@@ -111,7 +111,7 @@ class ImportVerification:
             tgt_text = _normalize_text(tgt.get("text") or "")
             if src_text != tgt_text:
                 details["text_mismatches"].append({
-                    "key": key,
+                    "key": stk,
                     "source": src_text[:100],
                     "target": tgt_text[:100],
                 })
@@ -125,7 +125,7 @@ class ImportVerification:
             has_real_media = bool(tgt.get("has_media_object"))
             for _sm in src_media:
                 entry = {
-                    "key": key,
+                    "key": stk,
                     "source_filename": _sm.get("filename"),
                     "source_type": _sm.get("type"),
                     "target_has_media_object": has_real_media,
@@ -136,12 +136,12 @@ class ImportVerification:
                     media_ok = False
                     details["media_failures"].append(entry)
 
-        # Check for extra messages in target
-        for key, tgt in self.target_by_key.items():
-            if key not in self.source_by_key:
+        # Extra messages in target = remaining unconsumed target texts.
+        for k, n in target_texts.items():
+            for _i in range(n):
                 details["extra_in_target"].append({
-                    "target_key": key,
-                    "target_preview": tgt.get("text", "")[:80],
+                    "target_key": k[:80],
+                    "target_preview": k[:80],
                 })
 
         # Media summary
@@ -210,24 +210,31 @@ def run_verification(
     verifier = ImportVerification(source_msgs, target_chat_messages)
     report = verifier.compare()
 
-    # Per-message timestamp comparison table (source vs visible vs metadata)
+    # Per-message timestamp comparison table (source vs visible vs metadata).
+    # Match source <-> target by normalized text (each used once).
+    tgt_pool: dict[str, list[dict]] = {}
+    for m in target_chat_messages:
+        tgt_pool.setdefault(_normalize_text(m.get("text") or ""), []).append(m)
+
     rows = []
     historical_meta_preserved = 0
     visible_matches_source = 0
-    for key, src in verifier.source_by_key.items():
-        tgt = verifier.target_by_key.get(key)
-        if tgt is None:
+    for src in source_msgs:
+        stk = _normalize_text(src.get("text") or "")
+        pending = tgt_pool.get(stk)
+        if not pending:
             continue
+        tgt = pending.pop(0)
         src_date = str(src.get("date") or "")
         tgt_fwd = tgt.get("fwd_from") or {}
-        meta_date = str(tgt.get("target_import_meta_date") or tgt_fwd.get("date") or "")
+        meta_date = str(tgt_fwd.get("date") or "")
         vis_date = str(tgt.get("date") or "")
         if meta_date[:10] == src_date[:10]:
             historical_meta_preserved += 1
         if src_date[:16] == vis_date[:16]:
             visible_matches_source += 1
         rows.append({
-            "key": list(key),
+            "key": stk[:80],
             "source_date": src_date,
             "target_visible_date": vis_date,
             "target_import_meta_date": meta_date,
@@ -245,11 +252,13 @@ def run_verification(
         "historical_metadata_preserved": historical_meta_preserved,
         "visible_equals_source": visible_matches_source,
         "placement_note": (
-            "Telegram assigns imported messages a server-side date equal to the "
-            "import moment; the original timestamp survives only as fwd_from "
-            "metadata. This is a documented Telegram limitation."
+            "Before Telegram materializes a freshly imported block (~1-3 min), "
+            "messages show the import moment as their visible date; the historical "
+            "date is preserved in fwd_from metadata and becomes visible once "
+            "materialized. Verification matches by content, so matched counts are "
+            "accurate regardless."
             if visible_matches_source < len(rows) and rows else
-            "Visible dates match sources." if not rows else ""
+            "Visible dates match sources." if not rows else "Visible dates match sources."
         ),
         "rows": rows,
     }
