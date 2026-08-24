@@ -113,22 +113,36 @@ async def search_chats(
         # 1) Exact resolution: username / phone / id.
         query = q.strip()
         if query:
-            try:
-                entity = await client.get_entity(query)
-                result = _chat_result(entity)
-                result.title += " (exact)"  # mark exact matches for the UI
-                results[result.id] = result
-            except Exception:
-                pass  # not resolvable as exact — rely on dialog filtering
+            # Numeric queries must be passed as int — Telethon treats a bare
+            # digit string as a username and raises "Cannot find any entity".
+            candidates: list = [query]
+            if query.lstrip("-").isdigit():
+                candidates.insert(0, int(query))
+            elif query.startswith("@"):
+                candidates.append(query.lstrip("@"))
+            for cand in candidates:
+                try:
+                    entity = await client.get_entity(cand)
+                    result = _chat_result(entity)
+                    if not query.startswith("@"):
+                        result.title = f"{result.title} (exact)"
+                    results[result.id] = result
+                    break
+                except Exception:
+                    continue
 
-        # 2) Dialog scan with substring filter on title/username.
-        dialogs = await client.get_dialogs(limit=100)
-        for dialog in dialogs:
+        # 2) Dialog scan with substring filter on title/username/phone/id.
+        ql = query.lower()
+        async for dialog in client.iter_dialogs(limit=200):
             entity = dialog.entity
             title = (getattr(entity, "title", None)
                      or getattr(entity, "first_name", None) or "").lower()
+            last = (getattr(entity, "last_name", None) or "").lower()
             username = (getattr(entity, "username", None) or "").lower()
-            if not query or query.lower() in title or query.lower() in username:
+            phone = (getattr(entity, "phone", None) or "").lower()
+            eid = str(getattr(entity, "id", ""))
+            haystack = f"{title} {last} {username} {phone} {eid}"
+            if not ql or ql in haystack:
                 result = _chat_result(entity)
                 results.setdefault(result.id, result)
         return list(results.values())[:50]
