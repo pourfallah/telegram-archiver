@@ -26,8 +26,16 @@ def _msg_key(m: dict) -> tuple:
     Sender-agnostic by design: Telegram's history import re-maps senders to
     the importing account, so original sender IDs cannot be preserved.
     Matching is (date-only, normalized text prefix).
+
+    The date used is the TRUE historical instant: for an imported message this
+    is the fwd_from.date metadata (Telegram preserves it there even though the
+    visible message.date may still be provisional/import-time before
+    materialization). Source messages use their own date.
     """
-    date = str(m.get("date") or "")[:10]  # date only
+    date = str(m.get("date") or "")[:10]
+    fwd = m.get("fwd_from") or {}
+    if fwd.get("date"):
+        date = str(fwd["date"])[:10]
     text = _normalize_text(m.get("text") or "")
     return (date, text[:80])
 
@@ -85,9 +93,11 @@ class ImportVerification:
                 })
                 sender_seq_ok = False
 
-            # Timestamp
+            # Timestamp — compare against the TRUE historical instant. For an
+            # imported message that's fwd_from.date; fall back to visible date.
             src_date = str(src.get("date") or "")
-            tgt_date = str(tgt.get("date") or "")
+            tgt_fwd = tgt.get("fwd_from") or {}
+            tgt_date = str(tgt_fwd.get("date") or tgt.get("date") or "")
             if src_date[:16] != tgt_date[:16]:  # compare to minute
                 details["timestamp_mismatches"].append({
                     "key": key,

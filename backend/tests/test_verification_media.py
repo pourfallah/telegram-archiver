@@ -46,3 +46,21 @@ def test_verification_handles_media_classification(tmp_path: Path):
     out.mkdir()
     html = build_fidelity_report(report, out)
     assert html.exists() and html.read_text().startswith("<!DOCTYPE html>")
+
+
+def test_verification_matches_by_imported_fwd_date(tmp_path: Path):
+    """Imported target messages carry the true date in fwd_from — matching must
+    use it even when visible message.date is still provisional (import-time)."""
+    src = _src_dir(tmp_path)
+    target = [
+        # visible date is import-time (not 2020), but fwd_from.date is historical
+        {"date": "2026-08-24T17:00:00+00:00", "sender": {"id": 1, "name": "A"},
+         "text": "hi", "media": [], "has_media_object": True,
+         "fwd_from": {"date": "2020-01-01T10:00:00+00:00", "imported": True}},
+        {"date": "2026-08-24T17:00:01+00:00", "sender": {"id": 2, "name": "B"},
+         "text": "yo", "media": [], "has_media_object": False,
+         "fwd_from": {"date": "2020-01-01T10:01:00+00:00", "imported": True}},
+    ]
+    report = run_verification(src, target)
+    assert report["counts"]["matched"] == 2
+    assert report["checks"]["timestamp"] is True

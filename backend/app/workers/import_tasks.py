@@ -314,17 +314,27 @@ async def _run_import_async(job_id: int, local_factory) -> dict:
                     return list(got)
 
                 target_list = await _fetch_target()
-                for _ in range(6):  # up to ~3 min of polling
-                    recent = [m for m in target_list if getattr(m, "fwd_from", None)
-                              and getattr(m.fwd_from, "imported", False)]
-                    if not recent:
-                        break
-                    sample = max(recent, key=lambda m: m.id)
-                    if abs((sample.date - __import__("datetime").datetime.now(
-                            __import__("datetime").timezone.utc)).total_seconds()) > 300:
-                        break  # already historical
+
+                # Telegram materializes the historical dates ~1-3 minutes after
+                # startHistoryImport. Because the peer may already hold older
+                # imported blocks, poll until the imported-message count stops
+                # growing (our block + its imports have landed) or a ceiling.
+                def _count_imported() -> int:
+                    return sum(
+                        1 for m in target_list
+                        if getattr(m, "fwd_from", None) and getattr(m.fwd_from, "imported", False)
+                    )
+
+                prev_count = _count_imported()
+                for _ in range(10):  # up to ~5 min
                     await asyncio.sleep(30)
                     target_list = await _fetch_target()
+                    cur = _count_imported()
+                    if cur > prev_count:  # still growing -> keep waiting
+                        prev_count = cur
+                        continue
+                    # stable population: block finished materializing
+                    break
 
                 # Convert to dict format + capture fwd_from (imported) metadata
                 from app.services.telegram_utils import message_to_dict
