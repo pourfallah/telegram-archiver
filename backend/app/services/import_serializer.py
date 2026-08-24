@@ -37,21 +37,21 @@ from typing import Any
 def _format_ts(
     dt: str | datetime | None, tz_offset_minutes: int | None = None
 ) -> str:
-    """Format a timestamp in the canonical WhatsApp export style:
-    M/D/YYYY, H:MM AM/PM.
+    """Format a timestamp in the canonical WhatsApp export style.
 
-    VERIFIED BEHAVIOR (job #25, 2026-08-24):
-    - Dot format "20.08.2026 06:49" with "<attached: x>" markers was imported
-      as LITERAL TEXT with no media attached.
-    - Genuine WhatsApp imports ("8/20/2026, 10:19 AM") show media correctly.
-    => The importer's media-marker recognition only works with the WhatsApp
-       line format. We therefore emit that format exclusively.
+    VERIFIED BEHAVIOR (2026-08-24, live Telegram):
+    - "[DD/MM/YYYY, HH:MM:SS]" (brackets, day-first, 24h, SECONDS) is the format
+      the importer's parser recognizes; with it, <attached: FILENAME> lines are
+      bound to real media objects via uploadImportedMedia.
+    - The earlier "[M/D/YYYY, H:MM AM/PM]" and "DD.MM.YYYY HH:MM" variants made
+      the parser treat <attached: ...> as literal text (media=None).
+    => We emit the bracket, DD/MM/YYYY, HH:MM:SS, seconds format exclusively.
 
-    TIMEZONE: the importer parses naive timestamps in the TARGET account's
-    local timezone, so shift source UTC by tz_offset_minutes first.
+    TIMEZONE: the importer parses naive timestamps in the TARGET account's local
+    timezone, so shift source UTC by tz_offset_minutes first (e.g. 210 for Iran).
     """
     if dt is None:
-        return "12/31/1969, 7:00 PM"
+        return "[01/01/1970, 00:00:00]"
     if isinstance(dt, str):
         try:
             dt = datetime.fromisoformat(dt.replace("Z", "+00:00"))
@@ -59,15 +59,14 @@ def _format_ts(
             try:
                 dt = datetime.strptime(dt, "%d/%m/%Y, %H:%M")
             except ValueError:
-                return "12/31/1969, 7:00 PM"
+                return "[01/01/1970, 00:00:00]"
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=UTC)
     if tz_offset_minutes is not None:
         # shift true instant into the target account's local wall clock
         dt = dt + timedelta(minutes=tz_offset_minutes)
         dt = dt.replace(tzinfo=None)
-    twelve = dt.strftime("%I:%M %p").lstrip("0")
-    return f"{dt.month}/{dt.day}/{dt.year}, {twelve}"
+    return dt.strftime("[%d/%m/%Y, %H:%M:%S]")
 
 
 def _escape(text: str) -> str:
