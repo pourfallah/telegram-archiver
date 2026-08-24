@@ -212,25 +212,45 @@ async def _run_import_async(job_id: int, local_factory) -> dict:
             job.progress = {"phase": "media_uploading", "uploaded": 0, "total": media_count}
             await db.commit()
 
-            # Build a map of filename -> media info from the archive
+            # Build a map of filename -> media info, but ONLY for files actually
+            # referenced in the import file (the <attached: FILENAME> lines).
+            # Avoids uploading the whole archive's media dir for a sliced import.
             archive_dir = export_dir / "archive"
             media_src = export_dir / "media"
             if archive_dir.exists():
                 media_src = archive_dir / "media"
 
-            media_map = {}
-            # Scan media directory
-            for media_type_dir in media_src.iterdir():
-                if media_type_dir.is_dir():
+            wanted: set[str] = set()
+            import_text = import_file.read_text(encoding="utf-8")
+            import re as _re
+            for m in _re.finditer(r"<attached:\s*([^>]+)>", import_text):
+                wanted.add(m.group(1).strip())
+
+            media_map: dict[str, dict] = {}
+            if media_src.exists():
+                for media_type_dir in media_src.iterdir():
+                    if not media_type_dir.is_dir():
+                        continue
                     for media_file in media_type_dir.iterdir():
-                        if media_file.is_file():
-                            key = media_file.name
-                            if key not in media_map:
-                                media_map[key] = {
+                        if media_file.is_file() and media_file.name in wanted:
+                            media_map.setdefault(media_file.name, {
+                                "path": media_file,
+                                "type": media_type_dir.name,
+                                "mime": _guess_mime(media_file),
+                            })
+            # If nothing matched by name (e.g. archive filenames differ from the
+            # marker), still fall back to every file so media isn't silently dropped.
+            if not media_map and wanted:
+                media_map.clear()
+                for media_type_dir in media_src.iterdir():
+                    if media_type_dir.is_dir():
+                        for media_file in media_type_dir.iterdir():
+                            if media_file.is_file():
+                                media_map.setdefault(media_file.name, {
                                     "path": media_file,
                                     "type": media_type_dir.name,
                                     "mime": _guess_mime(media_file),
-                                }
+                                })
 
             # Upload each media file
             uploaded_tokens = {}
