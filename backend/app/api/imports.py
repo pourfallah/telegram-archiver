@@ -1,4 +1,5 @@
 """Peer validation and Telegram history-import API endpoints."""
+import asyncio
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -349,11 +350,32 @@ async def list_target_chats(
     if account.status != "active":
         raise HTTPException(status_code=400, detail="Account is not logged in")
 
-    client, release = await manager.acquire_client(account)
+    # Acquire with a hard timeout; a zombied pooled client (dead connection
+    # after network change / rebuild) otherwise blocks the per-account lock
+    # forever and every Step 3 load hangs. On timeout, drop the cached client
+    # and retry once with a fresh connection.
+    try:
+        client, release = await asyncio.wait_for(
+            manager.acquire_client(account), timeout=15
+        )
+    except TimeoutError:
+        await manager.drop(account_id)
+        client, release = await manager.acquire_client(account)
+
+    async def _dialogs() -> list:
+        return await asyncio.wait_for(client.get_dialogs(limit=200), timeout=30)
 
     try:
-        dialogs = await client.get_dialogs()
-        chats = []
+        try:
+            dialogs = await _dialogs()
+        except TimeoutError:
+            # Client is unresponsive — evict and reconnect once.
+            await release()
+            await manager.drop(account_id)
+            client, release = await manager.acquire_client(account)
+            dialogs = await _dialogs()
+
+        chats: list[TargetChat] = []
         for dialog in dialogs:
             entity = dialog.entity
             if not entity:
