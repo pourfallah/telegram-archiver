@@ -10,7 +10,6 @@ from pathlib import Path
 import redis.asyncio as aioredis
 
 from app.config import get_settings
-from app.database import async_session_factory
 from app.models import ChatExport, ImportJob, TelegramSession
 from app.services.import_serializer import build_import_file, parse_import_head
 from app.services.import_verification import run_verification, write_report
@@ -52,13 +51,40 @@ async def _build_input_media(client, info: dict):
 
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=60)
 def run_import(self, job_id: int) -> dict:
-    """Run a real Telegram history import job."""
+    """Run a real Telegram history import job.
+
+    Celery prefork workers run each task under a fresh ``asyncio.run`` loop. The
+    global engine in ``app.database`` binds to the first loop that uses it, so
+    reusing it across tasks raises "Future attached to a different loop". We
+    create a task-local engine + session factory for every run and dispose it
+    before exiting (mirrors the export worker fix).
+    """
     import asyncio
-    return asyncio.run(_run_import_async(job_id))
+
+    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+    settings = get_settings()
+    local_engine = create_async_engine(
+        settings.database_url,
+        pool_pre_ping=True,
+        pool_size=5,
+        max_overflow=10,
+        pool_timeout=60,
+        echo=False,
+    )
+    local_factory = async_sessionmaker(local_engine, class_=AsyncSession, expire_on_commit=False)
+
+    async def _go() -> dict:
+        try:
+            return await _run_import_async(job_id, local_factory)
+        finally:
+            await local_engine.dispose()
+
+    return asyncio.run(_go())
 
 
-async def _run_import_async(job_id: int) -> dict:
-    async with async_session_factory() as db:
+async def _run_import_async(job_id: int, local_factory) -> dict:
+    async with local_factory() as db:
         job = await db.get(ImportJob, job_id)
         if job is None:
             return {"error": "Job not found"}

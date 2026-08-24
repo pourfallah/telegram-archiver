@@ -57,6 +57,9 @@ class ImportVerification:
             "timestamp_mismatches": [],
             "text_mismatches": [],
             "media_mismatches": [],
+            "media_classification": [],
+            "media_failures": [],
+            "media_summary": {},
         }
 
         # Check each source message has a match in target

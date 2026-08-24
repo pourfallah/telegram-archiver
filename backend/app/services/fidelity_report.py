@@ -23,6 +23,14 @@ def build_fidelity_report(verification: dict[str, Any], out_dir: Path) -> Path:
     # text: count of matched messages whose text check passed overall flag
     text_exact = matched if checks.get("text", False) else max(matched - 1, 0)
 
+    # MEDIA: real restored count from per-item classification
+    media_summary = (verification.get("details") or {}).get("media_summary") or {}
+    media_restored = media_summary.get("restored")
+    media_total = media_summary.get("total")
+    if media_restored is None:
+        media_restored = matched if checks.get("media", True) else 0
+        media_total = matched
+
     properties = [
         ("TEXT", text_exact, text_y, "exact content match"),
         ("TIMESTAMPS (metadata preserved)", meta_ok, matched,
@@ -30,7 +38,7 @@ def build_fidelity_report(verification: dict[str, Any], out_dir: Path) -> Path:
         ("TIMESTAMPS (visible placement)", visible_ok, matched,
          "Telegram displays imported messages at import time — server limitation"),
         ("SENDERS", matched, matched, "via fwd_from.from_name"),
-        ("MEDIA", matched if checks.get("media", True) else 0, matched,
+        ("MEDIA", media_restored, media_total,
          "re-associated by filename tokens"),
         ("ORDER", matched, matched, "block order follows source"),
         ("REPLIES", 0, 0, "not representable via history-import protocol; archive-only"),
