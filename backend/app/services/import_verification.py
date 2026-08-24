@@ -104,16 +104,24 @@ class ImportVerification:
                 })
                 text_ok = False
 
-            # Media presence (not byte-for-byte)
-            src_media = len(src.get("media") or [])
-            tgt_media = len(tgt.get("media") or [])
-            if src_media != tgt_media:
-                details["media_mismatches"].append({
+            # Media presence — classify per-message:
+            #   MEDIA_RESTORED: target message carries a real Telegram media object
+            #   MEDIA_FAILED: source had media but target shows only text
+            #     (incl. literal "<attached: ...>" placeholders)
+            src_media = src.get("media") or []
+            has_real_media = bool(tgt.get("has_media_object"))
+            for _sm in src_media:
+                entry = {
                     "key": key,
-                    "source_media_count": src_media,
-                    "target_media_count": tgt_media,
-                })
-                media_ok = False
+                    "source_filename": _sm.get("filename"),
+                    "source_type": _sm.get("type"),
+                    "target_has_media_object": has_real_media,
+                    "classification": "MEDIA_RESTORED" if has_real_media else "MEDIA_FAILED",
+                }
+                details["media_classification"].append(entry)
+                if not has_real_media:
+                    media_ok = False
+                    details["media_failures"].append(entry)
 
         # Check for extra messages in target
         for key, tgt in self.target_by_key.items():
@@ -123,6 +131,20 @@ class ImportVerification:
                     "target_preview": tgt.get("text", "")[:80],
                 })
 
+        # Media summary
+        cls = details["media_classification"]
+        restored = sum(1 for c in cls if c["classification"] == "MEDIA_RESTORED")
+        details["media_summary"] = {
+            "total": len(cls),
+            "restored": restored,
+            "failed": len(cls) - restored,
+            "note": (
+                "Telegram's history-import API does not bind uploaded media to "
+                "imported messages; media survives only as text placeholders. "
+                "Full media files remain in the canonical archive."
+                if cls and restored == 0 else ""
+            ),
+        }
         details["matched"] = matched
 
         # Overall classification

@@ -332,4 +332,7 @@ def message_to_dict(message) -> dict[str, Any]:
         "views": getattr(message, "views", None),
         "forwards": getattr(message, "forwards", None),
         "media": media,
+        # True only when Telegram attached a REAL media object (MessageMediaPhoto/
+        # MessageMediaDocument/...). Literal "<attached: ...>" text does NOT count.
+        "has_media_object": getattr(message, "media", None) is not None,
     }
