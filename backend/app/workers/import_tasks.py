@@ -81,13 +81,20 @@ async def _run_import_async(job_id: int) -> dict:
             client, release = await manager.acquire_client(account)
             importer = TelegramImporter(client)
 
-            # Resolve target peer
+            # Resolve target peer — prefer the stored numeric peer id (always
+            # available from the wizard's Step 3 selection); fall back to a
+            # contact identifier string if provided.
             contact_id = job.options.get("contact_identifier")
-            if not contact_id:
-                raise ValueError("No contact_identifier in job options")
-
             try:
-                peer, entity = await importer.resolve_peer(contact_id)
+                if job.target_peer_id:
+                    entity = await client.get_entity(job.target_peer_id)
+                    peer = await client.get_input_entity(entity)
+                elif contact_id:
+                    peer, entity = await importer.resolve_peer(contact_id)
+                else:
+                    raise ValueError(
+                        "No target_peer_id or contact_identifier in job options"
+                    )
             except Exception as exc:
                 job.status = "failed"
                 job.error = f"Peer resolution failed: {exc}"

@@ -209,6 +209,7 @@ export default function RealImport(): JSX.Element {
         target_account_id: targetAccountId,
         target_peer_id: targetChat.peer_id,
         message_limit: testCount,
+        contact_identifier: targetChat.username || targetChat.id.toString(),
       })
       setJob(res)
       nextStep()
