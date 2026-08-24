@@ -468,26 +468,76 @@ export default function RealImport(): JSX.Element {
           </section>
         )
       case 10:
+        const jobStatus = jobData?.status ?? job?.status
+        const phase = (jobData?.progress?.phase ?? progress?.phase) as string | undefined
+        const jobError = jobData?.error ?? job?.error
+        const phaseLabels: Record<string, string> = {
+          validating: 'Validating job…',
+          peer_checking: 'Checking target peer with Telegram…',
+          building_import_file: 'Building import file…',
+          check_import_format: 'Validating format with Telegram…',
+          init_history_import: 'Initializing import…',
+          media_uploading: `Uploading media… (${jobData?.progress?.uploaded ?? progress?.uploaded ?? 0}/${jobData?.progress?.total ?? progress?.total ?? '?'})`,
+          media_splicing: 'Finalizing media…',
+          starting_import: 'Starting history import…',
+          waiting: 'Telegram processing the import…',
+          verifying: 'Verifying imported messages (this can take ~2 min)…',
+          completed: 'Done',
+        }
         return (
           <section className="rounded-xl border border-slate-800 bg-slate-900 p-4 space-y-4">
             <h2 className="font-medium">Step 10: Verification Report</h2>
-            {verification && (
+
+            {jobError && (
+              <div className="rounded-md border border-rose-500 bg-rose-950/30 p-3 text-sm text-rose-300">
+                Import failed: {jobError}
+              </div>
+            )}
+
+            {verification ? (
               <div className="space-y-3">
-                <p className="text-sm">Overall: <span className={verification.overall === 'FULL_MATCH' ? 'text-emerald-400' : verification.overall === 'PARTIAL' ? 'text-amber-400' : 'text-rose-400'}>{verification.overall}</span></p>
+                <p className="text-sm">
+                  Overall:{' '}
+                  <span className={verification.overall === 'FULL_MATCH' ? 'text-emerald-400' : verification.overall === 'PARTIAL' || verification.overall === 'SOURCE_COVERED_EXTRA_IN_TARGET' ? 'text-amber-400' : 'text-rose-400'}>
+                    {verification.overall}
+                  </span>
+                  <span className="ml-2 text-xs text-slate-400">(import finished)</span>
+                </p>
+                {(() => {
+                  const ta = verification.timestamp_analysis
+                  if (!ta) return null
+                  return (
+                    <div className="text-xs rounded-md border border-slate-700 p-3 space-y-1">
+                      <div>Historical timestamps preserved as metadata: <b>{ta.historical_metadata_preserved}/{ta.matched_messages}</b></div>
+                      <div>Visible dates equal source dates: <b>{ta.visible_equals_source}/{ta.matched_messages}</b>{ta.placement_note ? ` — ${ta.placement_note}` : ''}</div>
+                    </div>
+                  )
+                })()}
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-sm">
                   <div>Source: {verification.counts.source}</div>
                   <div>Target: {verification.counts.target}</div>
                   <div>Matched: {verification.counts.matched}</div>
-                  <div>Sender order: {verification.checks.sender_order ? '✓' : '✗'}</div>
-                  <div>Timestamp: {verification.checks.timestamp ? '✓' : '✗'}</div>
+                  <div>Text: {verification.checks.text ? '✓' : '✗'}</div>
+                  <div>Media: {verification.checks.media ? '✓' : '✗'}</div>
                 </div>
                 <details className="mt-2">
                   <summary className="text-sm text-slate-400 cursor-pointer">View full report</summary>
                   <pre className="mt-2 text-xs text-slate-300 overflow-auto">{JSON.stringify(verification, null, 2)}</pre>
                 </details>
               </div>
+            ) : jobError ? null : (
+              <div className="space-y-2">
+                <p className="text-slate-300 text-sm">
+                  {phaseLabels[phase ?? ''] ?? 'Working…'}
+                </p>
+                <div className="h-1.5 w-full max-w-md overflow-hidden rounded bg-slate-800">
+                  <div className="h-full w-1/3 animate-pulse rounded bg-sky-500" />
+                </div>
+                <p className="text-xs text-slate-500">
+                  Job #{job?.id} · status: {jobStatus} · polling every 3 s
+                </p>
+              </div>
             )}
-            {job && !verification && <p className="text-slate-400">Verification pending…</p>}
             <div className="flex gap-2">
               <button onClick={prevStep} className="rounded-md border border-slate-700 px-4 py-2 text-sm hover:bg-slate-800">Back</button>
             </div>

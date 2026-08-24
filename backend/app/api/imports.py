@@ -249,6 +249,10 @@ async def get_import_job(
         status=row.status,
         options=row.options,
         created_at=row.created_at,
+        started_at=row.started_at,
+        finished_at=row.finished_at,
+        error=row.error,
+        progress=row.progress,
     )
 
 
