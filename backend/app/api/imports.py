@@ -348,8 +348,15 @@ async def list_target_chats(
     db: DbSession,
     user: Annotated[UserAccount, Depends(get_current_user)],
     manager: Manager,
+    q: str = "",
 ):
-    """Get list of dialogs from a target Telegram account for peer selection."""
+    """Get candidate peers for a target Telegram account.
+
+    Merges:
+      - active dialogs (existing conversations), and
+      - the full contacts list (so peers WITHOUT an open conversation are found),
+    then filters by `q` across title / numeric id / username / phone.
+    """
     account = await _get_owned_account(account_id, db, user)
     if account.status != "active":
         raise HTTPException(status_code=400, detail="Account is not logged in")
@@ -367,38 +374,99 @@ async def list_target_chats(
         client, release = await manager.acquire_client(account)
 
     async def _dialogs() -> list:
-        return await asyncio.wait_for(client.get_dialogs(limit=200), timeout=30)
+        return await asyncio.wait_for(
+            client.get_dialogs(limit=None), timeout=45
+        )
+
+    async def _contacts() -> list:
+        from telethon import functions
+
+        res = await asyncio.wait_for(
+            client(functions.contacts.GetContactsRequest(hash=0)), timeout=30
+        )
+        return list(res.contacts)
 
     try:
         try:
-            dialogs = await _dialogs()
+            dialogs, contacts = await asyncio.gather(_dialogs(), _contacts())
         except TimeoutError:
             # Client is unresponsive — evict and reconnect once.
             await release()
             await manager.drop(account_id)
             client, release = await manager.acquire_client(account)
-            dialogs = await _dialogs()
+            dialogs, contacts = await asyncio.gather(_dialogs(), _contacts())
 
-        chats: list[TargetChat] = []
-        for dialog in dialogs:
-            entity = dialog.entity
-            if not entity:
-                continue
-            # Get peer info - dialog may have peer or id directly
-            peer_id = getattr(dialog, "id", getattr(entity, "id", 0))
+        ql = q.strip().lower()
+        seen: dict[int, TargetChat] = {}
+
+        def _build(entity, dialog=None):
+            cid = int(getattr(entity, "id", 0))
+            peer_id = getattr(dialog, "id", None) or cid
             access_hash = getattr(dialog, "access_hash", None)
-            chats.append(TargetChat(
-                id=getattr(entity, "id", 0),
-                title=getattr(entity, "title", None) or getattr(entity, "first_name", None),
+            if access_hash is None:
+                access_hash = getattr(entity, "access_hash", None)
+            title = (getattr(entity, "title", None)
+                     or getattr(entity, "first_name", None) or "")
+            last = getattr(entity, "last_name", None)
+            if last:
+                title = f"{title} {last}".strip()
+            phone = getattr(entity, "phone", None)
+            if phone:
+                phone = f"+{phone}"
+            return TargetChat(
+                id=cid,
+                title=title or None,
                 username=getattr(entity, "username", None),
-                type=dialog.entity.__class__.__name__,
+                phone=phone,
+                type=type(entity).__name__,
                 peer_id=peer_id,
                 access_hash=access_hash,
-                message_count=getattr(dialog, "unread_count", 0),
-                is_marked_unread=bool(getattr(dialog, "unread_mark", False)),
-            ))
-        # Sort by title for consistent UI
-        chats.sort(key=lambda c: (c.title or "").lower())
+                message_count=getattr(dialog, "unread_count", 0) if dialog else 0,
+                is_marked_unread=bool(getattr(dialog, "unread_mark", False)) if dialog else False,
+            )
+
+        def _matches(tc: TargetChat) -> bool:
+            if not ql:
+                return True
+            return (ql in (tc.title or "").lower()
+                    or ql in (tc.username or "").lower()
+                    or ql in (tc.phone or "")
+                    or ql in str(tc.id))
+
+        # Only peers that can actually RECEIVE a history import are valid
+        # targets (official API + tdlib can_import_messages):
+        #   - private chats with a mutual contact (User entities)
+        #   - supergroups (megagroups) where we hold rights
+        # Broadcast channels and basic groups are excluded.
+        def _importable(entity) -> bool:
+            if type(entity).__name__ == "User":
+                return True  # private chat (contact status checked at import)
+            if getattr(entity, "broadcast", False):
+                return False  # channel — not importable
+            if getattr(entity, "megagroup", False):
+                return True  # supergroup — importable
+            return False     # basic group / other — not importable
+
+        # Dialogs (with real peer access_hash for later import)
+        for dialog in dialogs:
+            entity = dialog.entity
+            if not entity or not _importable(entity):
+                continue
+            tc = _build(entity, dialog)
+            if _matches(tc):
+                seen[tc.id] = tc
+
+        # Contacts (peers without an open dialog still selectable)
+        for entity in contacts:
+            if not _importable(entity):
+                continue
+            if int(getattr(entity, "id", 0) or 0) <= 0:
+                continue  # placeholder/incomplete contact entity
+            tc = _build(entity)
+            if _matches(tc):
+                seen.setdefault(tc.id, tc)
+
+        chats = sorted(seen.values(), key=lambda c: (c.title or "").lower())
         return TargetChatsResponse(chats=chats)
     finally:
         await release()

@@ -163,6 +163,7 @@ export interface TargetChat {
   id: number
   title: string | null
   username: string | null
+  phone: string | null
   type: string
   peer_id: number
   access_hash: number | null

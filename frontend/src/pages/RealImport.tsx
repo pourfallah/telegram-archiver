@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api, post } from '../lib/api'
 import type { Account, ExportJob, TargetChat, ImportJobPublic } from '../lib/types'
 
@@ -20,9 +20,18 @@ export default function RealImport(): JSX.Element {
 
   // Step 3: Select target chat
   const [targetChat, setTargetChat] = useState<TargetChat | null>(null)
+  const [chatSearch, setChatSearch] = useState('')
+  const [chatSearchDebounced, setChatSearchDebounced] = useState('')
+  useEffect(() => {
+    const t = setTimeout(() => setChatSearchDebounced(chatSearch.trim()), 350)
+    return () => clearTimeout(t)
+  }, [chatSearch])
   const { data: targetChats, isLoading: isLoadingChats } = useQuery({
-    queryKey: ['targetChats', targetAccountId],
-    queryFn: () => api<{ chats: TargetChat[] }>(`/api/import/${targetAccountId}/target-chats`),
+    queryKey: ['targetChats', targetAccountId, chatSearchDebounced],
+    queryFn: () => {
+      const q = chatSearchDebounced ? `?q=${encodeURIComponent(chatSearchDebounced)}` : ''
+      return api<{ chats: TargetChat[] }>(`/api/import/${targetAccountId}/target-chats${q}`)
+    },
     enabled: !!targetAccountId,
   })
 
@@ -284,9 +293,18 @@ export default function RealImport(): JSX.Element {
         return (
           <section className="rounded-xl border border-slate-800 bg-slate-900 p-4 space-y-4">
             <h2 className="font-medium">Step 3: Select Target Chat (Existing A↔B Peer)</h2>
-            {isLoadingChats && <p>Loading chats…</p>}
+            <input
+              value={chatSearch}
+              onChange={(e) => setChatSearch(e.target.value)}
+              placeholder="Search by name, username, phone or ID…"
+              className="w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm"
+            />
+            {isLoadingChats && <p className="text-sm text-slate-400">Loading chats…</p>}
             {!isLoadingChats && targetChats && (
               <div className="space-y-2 max-h-96 overflow-auto">
+                {targetChats.chats.length === 0 && (
+                  <p className="text-sm text-slate-500">No peers match “{chatSearch}”.</p>
+                )}
                 {targetChats.chats.map((chat) => (
                   <button
                     key={chat.id}
@@ -295,8 +313,11 @@ export default function RealImport(): JSX.Element {
                   >
                     <div className="font-medium">{chat.title || chat.username || 'Unknown'}</div>
                     <div className="text-xs text-slate-400">
-                      Type: {chat.type} · ID: {chat.peer_id} · Messages: {chat.message_count ?? 'unknown'}
+                      {[chat.username && `@${chat.username}`, chat.phone, `ID: ${chat.peer_id}`]
+                        .filter(Boolean)
+                        .join(' · ') || `ID: ${chat.peer_id}`}
                     </div>
+                    <div className="text-xs text-slate-500">Type: {chat.type} · Messages: {chat.message_count ?? 'unknown'}</div>
                   </button>
                 ))}
               </div>

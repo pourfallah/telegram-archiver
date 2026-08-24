@@ -71,6 +71,7 @@ class TargetChat(BaseModel):
     id: int
     title: str | None = None
     username: str | None = None
+    phone: str | None = None
     type: str
     peer_id: int
     access_hash: int | None = None
