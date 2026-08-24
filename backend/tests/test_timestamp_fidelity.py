@@ -49,7 +49,7 @@ def test_import_file_is_chronologically_ascending(archive, tmp_path):
     lines = _lines(out)
     dates = [ln.split(" - ")[0] for ln in lines if " - " in ln]
     parsed = [
-        __import__("datetime").datetime.strptime(d, "%d.%m.%Y %H:%M")
+        __import__("datetime").datetime.strptime(d, "%m/%d/%Y, %I:%M %p")
         for d in dates
     ]
     assert parsed == sorted(parsed), f"lines not ascending: {dates}"
@@ -61,21 +61,22 @@ def test_timestamps_preserve_source_dates_not_now(archive, tmp_path):
     build_import_file(archive, out)
     content = out.read_text(encoding="utf-8")
 
-    assert "01.01.2020 10:00" in content      # original historical date kept
-    assert "02.01.2020 15:30" in content
-    assert "10.06.2021 23:59" in content
-    assert "03.03.2025 10:00" in content
-    # no current-year stamp invented for old messages
+    # UTC sources written as-is (no tz shift passed): 2020-01-01T10:00Z -> 10:00 AM
+    assert "1/1/2020, 10:00 AM" in content
+    assert "1/2/2020, 3:30 PM" in content
+    assert "6/10/2021, 11:59 PM" in content
+    assert "3/3/2025, 10:00 AM" in content
     for ln in _lines(out):
         if "hello from 2020" in ln:
-            assert ln.startswith("01.01.2020"), ln
+            assert ln.startswith("1/1/2020, 10:00 AM"), ln
 
 
-def test_timezone_not_shifted_utc_written_verbatim(archive, tmp_path):
+def test_timezone_shift_applied_when_provided(archive, tmp_path):
     out = tmp_path / "import.txt"
-    build_import_file(archive, out)
+    # UTC+3:30 like the Iranian test accounts
+    build_import_file(archive, out, tz_offset_minutes=210)
     lines = _lines(out)
-    assert any(ln.startswith("01.01.2020 11:00") is False and "10:00" in ln and "hello from 2020" in ln for ln in lines)
+    assert any(ln.startswith("1/1/2020, 1:30 PM") and "hello from 2020" in ln for ln in lines)
 
 
 def test_media_line_shares_message_timestamp_and_sender(archive, tmp_path):
@@ -84,7 +85,7 @@ def test_media_line_shares_message_timestamp_and_sender(archive, tmp_path):
     lines = _lines(out)
     # video-only message keeps its own line with same ts/sender
     assert any(
-        ln.startswith("01.01.2020 10:01") and "Bob:" in ln and "<attached: v.mp4>" in ln
+        ln.startswith("1/1/2020, 10:01 AM") and "Bob:" in ln and "<attached: v.mp4>" in ln
         for ln in lines
     )
     # caption stays attached to one logical message: photo line + caption line share ts/sender
@@ -114,5 +115,7 @@ def test_limit_takes_oldest_slice_in_order(archive, tmp_path):
     assert stats["messages"] == 3
     # oldest three logical messages by date: 2020-01-01 10:00, 10:01, 2020-01-02 15:30
     first_ts = {ln.split(" - ")[0] for ln in lines}
-    assert "01.01.2020 10:00" in first_ts
-    assert not any(ln.startswith(("10.06.2021", "03.03.2025")) for ln in lines)
+    assert "1/1/2020, 10:00 AM" in first_ts
+    assert not any(
+        ln.startswith(("6/10/2021", "3/3/2025")) for ln in lines
+    )

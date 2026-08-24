@@ -135,16 +135,10 @@ async def _run_import_async(job_id: int) -> dict:
             # known recent message's server epoch vs its rendered wall clock.
             tz_offset_minutes = job.options.get("tz_offset_minutes")
             if tz_offset_minutes is None:
-                try:
-                    probe = await client.get_messages(peer, limit=1)
-                    first = probe[0] if probe else None
-                    mdate = getattr(first, "date", None) if first else None
-                    if mdate is not None and mdate.tzinfo is not None:
-                        tz_offset_minutes = int(mdate.utcoffset().total_seconds() // 60)
-                    else:
-                        tz_offset_minutes = None
-                except Exception:  # noqa: BLE001 — best effort
-                    tz_offset_minutes = None
+                # Telethon returns message.date in UTC — it cannot tell us the
+                # TARGET account's display timezone. Default to UTC+3:30 (Iran)
+                # which matches this deployment's accounts; overridable per job.
+                tz_offset_minutes = 210
 
             stats = build_import_file(
                 export_dir,
