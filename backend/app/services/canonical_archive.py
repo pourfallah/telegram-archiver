@@ -140,7 +140,7 @@ def build_canonical_archive(
     )
 
     stats = {
-        "schema_version": 1,
+        "schema_version": 3,
         "generated_at": datetime.now(UTC).isoformat(),
         "source": str(export_dir),
         "messages": len(messages),

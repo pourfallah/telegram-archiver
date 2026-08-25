@@ -202,6 +202,63 @@ def serialize_reactions(message) -> dict[str, Any] | None:
     return {"reactions": items} if items else None
 
 
+async def enrich_reaction_users(
+    client,
+    peer,
+    messages: list,
+    voter_limit: int = 20,
+    max_messages_with_voters: int = 20,
+) -> dict[int, list[dict[str, Any]]]:
+    """Fetch reaction voter lists for messages that carry reactions.
+
+    Uses messages.getMessagesReactions (bulk, per batch) and
+    messages.getMessageReactionsList (per message, capped) — best effort, never
+    raises: if Telegram does not allow it, the archive simply keeps totals.
+    Returns {message_id: [ {reaction, peer_id, ...} ]}.
+    """
+    out: dict[int, list[dict[str, Any]]] = {}
+    reacted = [m for m in messages if getattr(getattr(m, "reactions", None), "results", None)]
+    if not reacted:
+        return out
+    try:
+        from telethon import functions
+
+        # Bulk reaction state
+        try:
+            bulk = await client(functions.messages.GetMessagesReactionsRequest(
+                peer=peer, id=[m.id for m in reacted]))
+            _ = getattr(bulk, "updates", None)  # per-message lists are the source
+        except Exception:  # noqa: BLE001 — best effort
+            pass
+
+        # Per-message voter lists (capped for flood-safety)
+        for m in reacted[:max_messages_with_voters]:
+            try:
+                rl = await client(functions.messages.GetMessageReactionsListRequest(
+                    peer=peer, id=m.id, limit=voter_limit))
+                reactions_objs = getattr(rl, "reactions", None) or []
+                voters: list[dict[str, Any]] = []
+                for item in reactions_objs:
+                    r = getattr(item, "reaction", None)
+                    peer_obj = getattr(item, "peer_id", None)
+                    voters.append({
+                        "reaction_type": type(r).__name__ if r else None,
+                        "emoji": getattr(r, "emoticon", None) if r else None,
+                        "document_id": getattr(r, "document_id", None) if r else None,
+                        "peer_id": getattr(peer_obj, "user_id", None)
+                        or getattr(peer_obj, "channel_id", None)
+                        or getattr(peer_obj, "chat_id", None)
+                        if peer_obj else None,
+                    })
+                if voters:
+                    out[int(m.id)] = voters
+            except Exception:  # noqa: BLE001 — best effort (e.g. not allowed)
+                continue
+    except Exception:  # noqa: BLE001
+        return out
+    return out
+
+
 def classify_media(message) -> list[dict[str, Any]]:
     """Describe every media payload attached to a message.
 

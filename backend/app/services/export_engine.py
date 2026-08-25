@@ -37,6 +37,7 @@ from app.services.export_writers import (
 from app.services.media_downloader import MediaDownloader
 from app.services.telegram_utils import (
     deserialize_input_peer,
+    enrich_reaction_users,
     message_to_dict,
     safe_filename,
 )
@@ -184,6 +185,18 @@ class ExportEngine:
                     break
 
                 rows = [message_to_dict(m) for m in batch]
+                # Enrich reactions with voter identities where Telegram allows
+                # (best-effort; totals are always archived).
+                try:
+                    voters = await enrich_reaction_users(client, entity, batch)
+                    if voters:
+                        for r in rows:
+                            v = voters.get(r.get("id"))
+                            if v:
+                                rx = r.setdefault("reactions", {})
+                                rx.setdefault("voters", v)
+                except Exception:  # noqa: BLE001 — enrichment is additive
+                    pass
                 media_rows = self._collect_media(export, rows)
                 offset_id = min(m.id for m in batch)
                 processed += self._processed_in(batch)

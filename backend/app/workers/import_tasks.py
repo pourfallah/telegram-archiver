@@ -442,6 +442,76 @@ async def _run_import_async(job_id: int, local_factory) -> dict:
                 except Exception:  # noqa: BLE001 — report is additive
                     logger.warning("Max-fidelity report generation failed", exc_info=True)
 
+                # ---- PHASE B: post-import reconstruction (opt-in, safety-gated) ----
+                from app.services import reconstruction as recon
+
+                recon_enabled = bool((job.options or {}).get("reconstruct_reactions"))
+                src_map = load_canonical_messages(export_dir / "archive")
+                try:
+                    mapping = recon.build_source_target_mapping(
+                        src_map[-limit:], target_dicts
+                    )
+                    me0 = await client.get_me()
+                    # Sessions available to this worker (target account is this
+                    # client; the source account is a different session that the
+                    # worker does not act as unless explicitly wired).
+                    available_sessions: set[int] = {int(getattr(me0, "id", 0))}
+                    src_me_id = None
+                    try:
+                        from sqlalchemy import select as _sel
+
+                        async with local_factory() as db2:
+                            src_acc = await db2.scalar(
+                                _sel(TelegramSession).where(
+                                    TelegramSession.id == export.telegram_session_id))
+                        if src_acc:
+                            # READ-ONLY use of the source session: get_me() only.
+                            src_client, src_release = await manager.acquire_client(src_acc)
+                            try:
+                                src_me = await src_client.get_me()
+                                src_me_id = int(getattr(src_me, "id", 0) or 0)
+                            finally:
+                                await src_release()
+                    except Exception:  # noqa: BLE001
+                        pass
+
+                    plan = recon.plan_reactions(
+                        src_map[-limit:], mapping, available_sessions,
+                        source_me_id=src_me_id,
+                        target_me_id=int(getattr(me0, "id", 0)),
+                    )
+                    if recon_enabled:
+                        outcomes = await recon.reconstruct_reactions(
+                            client, peer, plan,
+                            new_target_ids={d.get("id") for d in target_dicts})
+                    else:
+                        outcomes = [{**p, "outcome": "PLAN_ONLY_DISABLED"} for p in plan]
+                    report["reaction_reconstruction"] = {
+                        "enabled": recon_enabled,
+                        "plan": plan,
+                        "outcomes": outcomes,
+                        "summary": recon.classify_plan(outcomes),
+                    }
+                except Exception:  # noqa: BLE001
+                    logger.warning("Reaction reconstruction failed", exc_info=True)
+                    report["reaction_reconstruction"] = {"enabled": recon_enabled, "error": True}
+
+                # Re-write the report so reaction_reconstruction is included
+                write_report(report, report_dir)
+
+                # Reaction recovery + sticker recovery reports
+                try:
+                    from app.services.fidelity_reports import (
+                        build_reaction_recovery_report,
+                        build_sticker_recovery_report,
+                    )
+                    pok = export_dir / "verification"
+                    build_reaction_recovery_report(
+                        src_map, report.get("reaction_reconstruction"), pok)
+                    build_sticker_recovery_report(src_map, target_dicts, pok)
+                except Exception:  # noqa: BLE001 — report is additive
+                    logger.warning("Recovery report generation failed", exc_info=True)
+
                 # IMPORT DEBUG LOG — reproducibility record for this job
                 import hashlib
                 debug_log = {

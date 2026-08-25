@@ -155,3 +155,116 @@ Telegram's history-import protocol does not currently restore them → <b>ARCHIV
     path = out_dir / "REACTION_FIDELITY_REPORT.html"
     path.write_text(html, encoding="utf-8")
     return path
+
+
+def build_reaction_recovery_report(
+    source_messages: list[dict],
+    reconstruction: dict | None,
+    out_dir: Path,
+) -> Path:
+    """REACTION_RECOVERY_REPORT.html — per source reaction: source msg -> target
+    msg, source reactor -> reconstructed-by, reaction, target outcome, status."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    outcomes = (reconstruction or {}).get("outcomes") or []
+    by_key = {}
+    for o in outcomes:
+        by_key[(o.get("source_message_id"), o.get("reactor_id"),
+                o.get("emoji"), o.get("document_id"))] = o
+
+    rows = []
+    for m in source_messages or []:
+        rx = m.get("reactions") or {}
+        voters = rx.get("voters") or []
+        if voters:
+            for v in voters:
+                key = (m.get("id"), v.get("peer_id"), v.get("emoji"), v.get("document_id"))
+                o = by_key.get(key)
+                status = (o or {}).get("outcome") or "NOT_PLANNED"
+                rows.append(
+                    f"<tr><td class='mono'>{m.get('id')}</td>"
+                    f"<td class='mono'>{o.get('target_id','—') if o else '—'}</td>"
+                    f"<td class='mono'>{v.get('peer_id','?')}</td>"
+                    f"<td>{v.get('emoji') or ('custom:' + str(v.get('document_id')))}</td>"
+                    f"<td><b>{status}</b></td></tr>"
+                )
+        for t in rx.get("reactions", []):
+            if voters:
+                continue
+            rows.append(
+                f"<tr><td class='mono'>{m.get('id')}</td><td>—</td><td>?</td>"
+                f"<td>{t.get('emoji') or ('custom:' + str(t.get('document_id')))}</td>"
+                f"<td><b>REACTOR_UNKNOWN</b></td></tr>"
+            )
+
+    summary = ""
+    if reconstruction:
+        summary = "<p><b>Reconstruction:</b> enabled=" + str(reconstruction.get("enabled")) + \
+                  " | " + str(reconstruction.get("summary") or {}) + "</p>"
+
+    html = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Reaction Recovery Report</title>
+<style>body{{background:#0f172a;color:#e2e8f0;font-family:system-ui;margin:24px}}
+h1{{color:#fbbf24}} table{{border-collapse:collapse;width:100%}}
+th,td{{border:1px solid #334155;padding:4px 8px;font-size:13px}} .mono{{font-family:monospace}}</style>
+</head><body><h1>REACTION RECOVERY REPORT</h1>
+{summary}
+<p>Identity rule: a reaction by user X is only reconstructed by an authenticated
+session of user X. Otherwise <b>REACTOR_SESSION_REQUIRED</b> — never faked.</p>
+<table><thead><tr><th>source msg</th><th>target msg</th><th>reactor</th><th>reaction</th><th>status</th></tr></thead>
+<tbody>{''.join(rows) or '<tr><td colspan=5>no reactions</td></tr>'}</tbody></table>
+</body></html>"""
+    path = out_dir / "REACTION_RECOVERY_REPORT.html"
+    path.write_text(html, encoding="utf-8")
+    return path
+
+
+def build_sticker_recovery_report(
+    source_messages: list[dict], target_dicts: list[dict], out_dir: Path
+) -> Path:
+    """STICKER_RECOVERY_REPORT.html — per source sticker: source identity vs
+    target document attributes and honest classification."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    from app.services.import_verification import _normalize_text
+
+    rows = []
+    for m in source_messages or []:
+        for med in m.get("media") or []:
+            if med.get("type") != "sticker":
+                continue
+            tgt = None
+            for t in target_dicts or []:
+                if _normalize_text(t.get("text") or "") == _normalize_text(m.get("text") or "") \
+                        and t.get("target_media_raw"):
+                    tgt = t
+                    break
+            raw = (tgt or {}).get("target_media_raw") or {}
+            attrs = raw.get("attrs") or []
+            has_sticker_attr = "DocumentAttributeSticker" in attrs
+            status = ("STICKER_EXACT" if has_sticker_attr else
+                      "STICKER_SEMANTIC_PARTIAL" if raw.get("ctor") == "MessageMediaDocument"
+                      else "DOCUMENT_ONLY")
+            extra = med.get("extra") or {}
+            rows.append(
+                f"<tr><td class='mono'>{m.get('id')}</td>"
+                f"<td>{extra.get('sticker_emoji','')}</td>"
+                f"<td>{extra.get('animated')}</td>"
+                f"<td class='mono'>{raw.get('ctor','—')}</td>"
+                f"<td class='mono'>{','.join(attrs) or '—'}</td>"
+                f"<td class='mono'>{raw.get('mime','—')}</td>"
+                f"<td><b>{status}</b></td></tr>"
+            )
+    html = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Sticker Recovery Report</title>
+<style>body{{background:#0f172a;color:#e2e8f0;font-family:system-ui;margin:24px}}
+h1{{color:#fbbf24}} table{{border-collapse:collapse;width:100%}}
+th,td{{border:1px solid #334155;padding:4px 8px;font-size:13px}} .mono{{font-family:monospace}}</style>
+</head><body><h1>STICKER RECOVERY REPORT</h1>
+<p>A generic WebP document WITHOUT DocumentAttributeSticker is DOCUMENT_ONLY —
+never STICKER_EXACT.</p>
+<table><thead><tr><th>source msg</th><th>sticker emoji</th><th>animated</th>
+<th>target constructor</th><th>target attrs</th><th>target mime</th><th>status</th></tr></thead>
+<tbody>{''.join(rows) or '<tr><td colspan=7>no stickers</td></tr>'}</tbody></table>
+</body></html>"""
+    path = out_dir / "STICKER_RECOVERY_REPORT.html"
+    path.write_text(html, encoding="utf-8")
+    return path
