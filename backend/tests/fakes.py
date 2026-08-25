@@ -300,6 +300,12 @@ class FakeExportClient(FakeTelegramClient):
         self.calls.append("get_dialogs")
         return FakeMessagesList(self._dialogs or [FakeDialog(e) for e in self.messages if isinstance(e, FakeChatEntity)])
 
+    async def iter_dialogs(self, limit=None):  # noqa: ARG002
+        self.calls.append("iter_dialogs")
+        d = self._dialogs or [FakeDialog(e) for e in self.messages if isinstance(e, FakeChatEntity)]
+        for item in d:
+            yield item
+
     async def download_media(self, message, file=None, **kwargs):  # noqa: ARG002
         """Write fake bytes for a message's media and return the saved path."""
         from pathlib import Path

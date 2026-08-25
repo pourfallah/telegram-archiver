@@ -280,7 +280,7 @@ class ExportEngine:
                     "sender_username": (r.get("sender") or {}).get("username"),
                     "text": r.get("text"),
                     "entities": r.get("entities") or None,
-                    "reply_to_message_id": r.get("reply_to"),
+                    "reply_to_message_id": (r.get("reply_to") or {}).get("reply_to_msg_id") if isinstance(r.get("reply_to"), dict) else r.get("reply_to"),
                     "forwarded_from": r.get("forwarded_from"),
                     "reactions": r.get("reactions"),
                     "views": r.get("views"),

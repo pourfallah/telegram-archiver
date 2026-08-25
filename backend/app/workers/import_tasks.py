@@ -12,7 +12,7 @@ import redis.asyncio as aioredis
 from app.config import get_settings
 from app.models import ChatExport, ImportJob, TelegramSession
 from app.services.import_serializer import build_import_file, parse_import_head
-from app.services.import_verification import run_verification, write_report
+from app.services.import_verification import load_canonical_messages, run_verification, write_report
 from app.services.session_manager import SessionManager
 from app.services.telegram_import import ImportProtocolError, TelegramImporter
 from app.workers.celery_app import celery_app
@@ -369,6 +369,21 @@ async def _run_import_async(job_id: int, local_factory) -> dict:
                     build_fidelity_report(report, export_dir / "verification")
                 except Exception:  # noqa: BLE001 — report is additive
                     logger.warning("Fidelity report generation failed", exc_info=True)
+
+                # Maximum-fidelity reports (per-message source/target + reactions)
+                try:
+                    from app.services.fidelity_reports import (
+                        build_fidelity_report as build_fid2,
+                    )
+                    from app.services.fidelity_reports import (
+                        build_reaction_report,
+                    )
+                    src_map = load_canonical_messages(export_dir / "archive")
+                    pok = export_dir / "verification"
+                    build_fid2(report, pok, source_messages=src_map, target_messages=target_dicts)
+                    build_reaction_report(src_map, pok)
+                except Exception:  # noqa: BLE001 — report is additive
+                    logger.warning("Max-fidelity report generation failed", exc_info=True)
 
                 # IMPORT DEBUG LOG — reproducibility record for this job
                 import hashlib

@@ -184,6 +184,43 @@ See [docs/development.md](docs/development.md) for details.
 - [docs/development.md](docs/development.md) — local dev, testing, contributing
 - [PROJECT_PLAN.md](PROJECT_PLAN.md) — the full project plan & architecture review
 
+## Telegram protocol references
+
+History import:
+https://core.telegram.org/api/import
+
+Media import:
+https://core.telegram.org/method/messages.uploadImportedMedia
+
+Import methods:
+https://core.telegram.org/method/messages.checkHistoryImport ·
+https://core.telegram.org/method/messages.checkHistoryImportPeer ·
+https://core.telegram.org/method/messages.initHistoryImport ·
+https://core.telegram.org/method/messages.startHistoryImport
+
+Reactions:
+https://core.telegram.org/api/reactions
+
+Custom emoji:
+https://core.telegram.org/api/custom-emoji · https://core.telegram.org/constructor/messageEntityCustomEmoji
+
+Message entities:
+https://core.telegram.org/type/MessageEntity
+
+Stickers:
+https://core.telegram.org/api/stickers
+
+Schema:
+https://core.telegram.org/schema
+
+> **Fidelity model:** this project is *maximum-fidelity archival + reconstruction*,
+> **not** a Telegram database rollback. The canonical archive preserves every
+> readable field (entities incl. custom-emoji document IDs, reactions with
+> type/count/chosen, stickers, replies, forwards, grouped media, raw MTProto
+> snapshot). The import restores what Telegram's protocol supports; unsupported
+> fields remain fully archived and are *never* silently dropped or faked. The
+> original source message ID and the imported target message ID are distinct.
+
 ## License
 
 MIT — see [LICENSE](LICENSE). Use responsibly and in accordance with Telegram's

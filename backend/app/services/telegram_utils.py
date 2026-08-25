@@ -28,7 +28,10 @@ ENTITY_TYPE_MAP = {
     "MessageEntityTextUrl": "text_url",
     "MessageEntityMentionName": "mention_name",
     "MessageEntityBlockquote": "blockquote",
+    "MessageEntitySpoiler": "spoiler",
+    "MessageEntityCustomEmoji": "custom_emoji",
     "MessageEntityUnknown": "unknown",
+    "MessageEntityBankCard": "bank_card",
 }
 
 # Media type in which each Telegram entity prefix is classified.
@@ -85,21 +88,52 @@ def sender_info(sender) -> dict[str, Any] | None:
     }
 
 
-def serialize_entities(message) -> list[dict[str, Any]]:
-    """Flatten Telegram entity objects into plain dicts."""
+def serialize_reply(message) -> dict[str, Any] | None:
+    """Serialize the reply header including quote when available."""
+    reply_to = getattr(message, "reply_to", None)
+    if reply_to is None:
+        return None
+    out: dict[str, Any] = {}
+    reply_msg_id = getattr(reply_to, "reply_to_msg_id", None)
+    nested = getattr(reply_to, "reply_to", None)
+    if reply_msg_id is None and nested is not None:
+        reply_msg_id = getattr(nested, "message_id", None)
+    out["reply_to_msg_id"] = reply_msg_id
+    out["reply_to_peer_id"] = getattr(reply_to, "reply_to_peer_id", None)
+    out["top_msg_id"] = getattr(reply_to, "reply_to_top_id", None)
+    out["quote"] = getattr(reply_to, "quote", None)
+    if getattr(reply_to, "quote_entities", None):
+        out["quote_entities"] = _entities_to_dicts(reply_to.quote_entities)
+    return out
+
+
+def _entities_to_dicts(entities) -> list[dict[str, Any]]:
     out = []
-    for entity in getattr(message, "entities", None) or []:
+    for entity in entities or []:
         kind = ENTITY_TYPE_MAP.get(type(entity).__name__, type(entity).__name__)
         item: dict[str, Any] = {
             "type": kind,
             "offset": getattr(entity, "offset", 0),
             "length": getattr(entity, "length", 0),
         }
-        for attr in ("url", "user_id", "language"):
+        for attr in ("url", "language", "user_id"):
             if hasattr(entity, attr) and getattr(entity, attr) is not None:
                 item[attr] = getattr(entity, attr)
+        doc_id = getattr(entity, "document_id", None)
+        if doc_id is not None:
+            item["document_id"] = doc_id
         out.append(item)
     return out
+
+
+def serialize_entities(message) -> list[dict[str, Any]]:
+    """Flatten Telegram entity objects into plain dicts.
+
+    Offsets/lengths are kept exactly as Telegram reports them (UTF-16 code
+    units). For custom emoji the document_id is preserved — a custom emoji is
+    NEVER downgraded to a plain string. The fallback emoji lives in the text.
+    """
+    return _entities_to_dicts(getattr(message, "entities", None) or [])
 
 
 def serialize_forward(message) -> dict[str, Any] | None:
@@ -110,31 +144,62 @@ def serialize_forward(message) -> dict[str, Any] | None:
     origin = getattr(fwd, "from_id", None)
     origin_id = None
     if origin is not None:
-        origin_id = getattr(origin, "user_id", None) or getattr(origin, "channel_id", None) or getattr(origin, "chat_id", None)
+        origin_id = (getattr(origin, "user_id", None)
+                     or getattr(origin, "channel_id", None)
+                     or getattr(origin, "chat_id", None))
     if getattr(fwd, "chat", None) is not None:
         name = fwd.chat.title or fwd.chat.first_name
     elif getattr(fwd, "sender", None) is not None:
         name = fwd.sender.first_name or fwd.sender.username
-    return {
+    out: dict[str, Any] = {
         "from_id": origin_id,
         "name": name,
         "date": isoformat(getattr(fwd, "date", None)),
+        "from_name": getattr(fwd, "from_name", None),
+        "channel_post": getattr(fwd, "channel_post", None),
+        "post_author": getattr(fwd, "post_author", None),
     }
+    saved_from = getattr(fwd, "saved_from_peer", None)
+    if saved_from is not None:
+        out["saved_from_peer_id"] = (getattr(saved_from, "user_id", None)
+                                     or getattr(saved_from, "channel_id", None)
+                                     or getattr(saved_from, "chat_id", None))
+    out["saved_from_msg_id"] = getattr(fwd, "saved_from_msg_id", None)
+    return out
 
 
-def serialize_reactions(message) -> dict[str, int] | None:
+def serialize_reactions(message) -> dict[str, Any] | None:
+    """Serialize message reactions WITHOUT flattening them.
+
+    Preserves each reaction's type (emoji / custom emoji / paid), count,
+    chosen state, and document_id for custom-emoji reactions. Reaction voters
+    are fetched separately (messages.getMessageReactionsList).
+    """
     reactions = getattr(message, "reactions", None)
     results = getattr(reactions, "results", None)
     if not results:
         return None
-    out: dict[str, int] = {}
+    items = []
     for r in results:
         reaction = getattr(r, "reaction", None)
         if reaction is None:
             continue
-        emoji = getattr(reaction, "emoticon", None) or str(reaction)
-        out[emoji] = out.get(emoji, 0) + getattr(r, "count", 0)
-    return out or None
+        rtype = type(reaction).__name__
+        emoji = getattr(reaction, "emoticon", None)
+        doc_id = getattr(reaction, "document_id", None)
+        item: dict[str, Any] = {
+            "reaction_type": rtype,
+            "count": getattr(r, "count", 0),
+        }
+        if emoji is not None:
+            item["emoji"] = emoji
+        if doc_id is not None:
+            item["document_id"] = doc_id
+        # Chosen reactions (the account's own selection) — flags.chosen
+        if getattr(r, "chosen", False):
+            item["chosen"] = True
+        items.append(item)
+    return {"reactions": items} if items else None
 
 
 def classify_media(message) -> list[dict[str, Any]]:
@@ -307,15 +372,56 @@ def deserialize_input_peer(data: dict[str, Any] | None):
     return cls(**kwargs)
 
 
+def to_raw_json(message) -> dict[str, Any] | None:
+    """Best-effort serialized snapshot of the raw Telegram message object.
+
+    Preserves constructors/ids/access_hashes for future migration, but strips
+    secret-ish file references (salt/tokens) and oversized bytes. Used as an
+    archival-only fallback so no readable information is dropped at export time.
+    """
+    try:
+        import json as _json
+
+        raw = message.to_dict()
+    except Exception:  # noqa: BLE001
+        return None
+    if not isinstance(raw, dict):
+        raw = {"value": raw}
+
+    def _scrub(obj):
+        if isinstance(obj, dict):
+            out = {}
+            for k, v in obj.items():
+                if k in ("file_reference", "key", "iv", "data") and isinstance(v, bytes):
+                    out[k] = None  # secret-ish bytes → drop value, keep key
+                elif k == "document_id" or k == "id":
+                    out[k] = _jsafe(v)
+                elif isinstance(v, bytes):
+                    out[k] = "<bytes>"
+                else:
+                    out[k] = _scrub(v)
+            return out
+        if isinstance(obj, list):
+            return [_scrub(i) for i in obj]
+        if isinstance(obj, bytes):
+            return "<bytes>"
+        return _jsafe(obj)
+
+    def _jsafe(v):
+        if v is None or isinstance(v, (str, int, float, bool)):
+            return v
+        try:
+            _json.dumps(v)
+            return v
+        except Exception:  # noqa: BLE001
+            return str(v)
+
+    return _scrub(raw)
+
+
 def message_to_dict(message) -> dict[str, Any]:
-    """Full message normalizer — the canonical JSON export shape (schema v1)."""
+    """Full message normalizer — the canonical JSON export shape (schema v2)."""
     sender = getattr(message, "sender", None)
-    reply_to = getattr(message, "reply_to", None)
-    reply_id = None
-    if reply_to is not None:
-        reply_id = getattr(reply_to, "reply_to_msg_id", None) or getattr(reply_to, "reply_to_msg_id", None)
-        if reply_id is None and getattr(reply_to, "reply_to", None) is not None:
-            reply_id = getattr(reply_to.reply_to, "message_id", None)
 
     media = classify_media(message)
     return {
@@ -326,13 +432,24 @@ def message_to_dict(message) -> dict[str, Any]:
         "sender": sender_info(sender),
         "text": getattr(message, "message", "") or "",
         "entities": serialize_entities(message),
-        "reply_to": reply_id,
+        "reply_to": serialize_reply(message),
         "forwarded_from": serialize_forward(message),
         "reactions": serialize_reactions(message),
         "views": getattr(message, "views", None),
         "forwards": getattr(message, "forwards", None),
+        "replies_count": getattr(getattr(message, "replies", None), "replies", None),
+        "via_bot": getattr(message, "via_bot_id", None),
+        "post_author": getattr(message, "post_author", None),
+        "pinned": bool(getattr(message, "pinned", False)),
+        "noforwards": bool(getattr(message, "noforwards", False)),
+        "silent": bool(getattr(message, "silent", False)),
+        "mentioned": bool(getattr(message, "mentioned", False)),
+        "media_unread": bool(getattr(message, "media_unread", False)),
+        "post": bool(getattr(message, "post", False)),
         "media": media,
         # True only when Telegram attached a REAL media object (MessageMediaPhoto/
         # MessageMediaDocument/...). Literal "<attached: ...>" text does NOT count.
         "has_media_object": getattr(message, "media", None) is not None,
+        # Archival raw snapshot (strip secrets); for future migration only.
+        "raw_message": to_raw_json(message),
     }
