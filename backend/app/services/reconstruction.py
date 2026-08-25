@@ -34,7 +34,9 @@ def build_source_target_mapping(
     source_messages: list[dict], target_dicts: list[dict]
 ) -> dict[int, dict]:
     """Map source_message_id -> target message using the SAME multi-field keys
-    as the verifier (never text-only). Returns {source_id: {target_id, ...}}."""
+    as the verifier (never text-only). Empty-text media messages that fail both
+    exact and text matching fall back to POSITIONAL order (both sides are
+    oldest-first), so a sticker and a photo in the same block never swap."""
     mapping: dict[int, dict] = {}
     target_by_map: dict[str, dict] = {}
     target_by_text: dict[str, list[dict]] = {}
@@ -43,6 +45,8 @@ def build_source_target_mapping(
         target_by_map.setdefault(mk, tgt)
         target_by_text.setdefault(_normalize_text(tgt.get("text") or ""), []).append(tgt)
 
+    unmatched_src: list[dict] = []
+    used_target_ids: set[int] = set()
     for src in source_messages:
         mk = _source_mapping_key(src)
         tgt = target_by_map.get(mk)
@@ -53,11 +57,30 @@ def build_source_target_mapping(
                 tgt = pending[0]
                 pending.pop(0)
                 match = "text_only"
-        if tgt is None:
+        if tgt is None or int(tgt.get("id") or 0) in used_target_ids:
+            unmatched_src.append(src)
             continue
+        used_target_ids.add(int(tgt.get("id") or 0))
         mapping[int(src.get("id"))] = {
             "target_id": int(tgt.get("id")),
             "match": match,
+            "source_text": (src.get("text") or "")[:60],
+        }
+
+    # Positional fallback: remaining source (oldest-first) -> remaining target
+    # (oldest-first, excluding used). Targets arrive newest-first from MTProto,
+    # so reverse to get oldest-first.
+    remaining = [t for t in target_dicts
+                 if int(t.get("id") or 0) not in used_target_ids]
+    remaining.reverse()  # oldest-first
+    for src in unmatched_src:
+        if not remaining:
+            break
+        tgt = remaining.pop(0)
+        used_target_ids.add(int(tgt.get("id") or 0))
+        mapping[int(src.get("id"))] = {
+            "target_id": int(tgt.get("id")),
+            "match": "positional",
             "source_text": (src.get("text") or "")[:60],
         }
     return mapping
