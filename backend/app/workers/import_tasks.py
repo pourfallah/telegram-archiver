@@ -447,10 +447,10 @@ async def _run_import_async(job_id: int, local_factory) -> dict:
 
                 recon_enabled = bool((job.options or {}).get("reconstruct_reactions"))
                 src_map = load_canonical_messages(export_dir / "archive")
+                mapping = recon.build_source_target_mapping(
+                    src_map[-limit:], target_dicts
+                )
                 try:
-                    mapping = recon.build_source_target_mapping(
-                        src_map[-limit:], target_dicts
-                    )
                     me0 = await client.get_me()
                     # Sessions available to this worker (target account is this
                     # client; the source account is a different session that the
@@ -508,7 +508,8 @@ async def _run_import_async(job_id: int, local_factory) -> dict:
                     pok = export_dir / "verification"
                     build_reaction_recovery_report(
                         src_map, report.get("reaction_reconstruction"), pok)
-                    build_sticker_recovery_report(src_map, target_dicts, pok)
+                    build_sticker_recovery_report(src_map, target_dicts, pok,
+                                                  mapping=mapping)
                 except Exception:  # noqa: BLE001 — report is additive
                     logger.warning("Recovery report generation failed", exc_info=True)
 

@@ -219,12 +219,17 @@ session of user X. Otherwise <b>REACTOR_SESSION_REQUIRED</b> — never faked.</p
 
 
 def build_sticker_recovery_report(
-    source_messages: list[dict], target_dicts: list[dict], out_dir: Path
+    source_messages: list[dict], target_dicts: list[dict], out_dir: Path,
+    mapping: dict | None = None,
 ) -> Path:
     """STICKER_RECOVERY_REPORT.html — per source sticker: source identity vs
-    target document attributes and honest classification."""
+    target document attributes and honest classification.
+
+    Uses the source->target message mapping when provided (avoids text-only
+    ambiguity for empty-text media messages)."""
     out_dir.mkdir(parents=True, exist_ok=True)
-    from app.services.import_verification import _normalize_text
+
+    tgt_by_id = {int(t.get("id")): t for t in (target_dicts or []) if t.get("id")}
 
     rows = []
     for m in source_messages or []:
@@ -232,11 +237,15 @@ def build_sticker_recovery_report(
             if med.get("type") != "sticker":
                 continue
             tgt = None
-            for t in target_dicts or []:
-                if _normalize_text(t.get("text") or "") == _normalize_text(m.get("text") or "") \
-                        and t.get("target_media_raw"):
-                    tgt = t
-                    break
+            if mapping:
+                tgt = tgt_by_id.get(mapping.get(int(m.get("id") or 0), {}).get("target_id"))
+            else:
+                from app.services.import_verification import _normalize_text
+                for t in target_dicts or []:
+                    if _normalize_text(t.get("text") or "") == _normalize_text(m.get("text") or "") \
+                            and t.get("target_media_raw"):
+                        tgt = t
+                        break
             raw = (tgt or {}).get("target_media_raw") or {}
             attrs = raw.get("attrs") or []
             has_sticker_attr = "DocumentAttributeSticker" in attrs
