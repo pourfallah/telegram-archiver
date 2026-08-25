@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 import json
 import shutil
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 OUT = Path("/data/exports/experiments/matrix")
@@ -95,10 +95,10 @@ async def main() -> None:
 
         # Each block is one media type, unique dates to separate blocks
         bases = {
-            "photo_cap": datetime(2024, 2, 1, 9, 0, 0, tzinfo=timezone.utc),
-            "document": datetime(2024, 3, 1, 9, 0, 0, tzinfo=timezone.utc),
-            "video": datetime(2024, 4, 1, 9, 0, 0, tzinfo=timezone.utc),
-            "sticker": datetime(2024, 5, 1, 9, 0, 0, tzinfo=timezone.utc),
+            "photo_cap": datetime(2024, 2, 1, 9, 0, 0, tzinfo=UTC),
+            "document": datetime(2024, 3, 1, 9, 0, 0, tzinfo=UTC),
+            "video": datetime(2024, 4, 1, 9, 0, 0, tzinfo=UTC),
+            "sticker": datetime(2024, 5, 1, 9, 0, 0, tzinfo=UTC),
         }
 
         # --- PHOTO + CAPTION ---

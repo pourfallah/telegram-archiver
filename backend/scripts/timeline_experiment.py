@@ -11,15 +11,15 @@ historical instant, or only preserves it in fwd_from.date (import metadata).
 import asyncio
 import json
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+
+import redis.asyncio as aioredis
 
 from app.config import get_settings
 from app.database import async_session_factory
 from app.models import TelegramSession
 from app.services.session_manager import SessionManager
-from telethon import types
-import redis.asyncio as aioredis
 
 TARGET = 165649921          # pourfallah (account B's peer = account A)
 SRC_ACCOUNT = 1             # +989394430100
@@ -54,7 +54,7 @@ async def main(run_id: str):
         if isinstance(ts, str) and "T" in ts:
             dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
         else:
-            dt = datetime.now(timezone.utc)
+            dt = datetime.now(UTC)
         dt = dt + timedelta(minutes=3)
         lines.append(f"[{dt.strftime('%d/%m/%Y, %H:%M:%S')}] First Dev.: {m['text']}")
     import_file = OUT / f"{run_id}_import.txt"

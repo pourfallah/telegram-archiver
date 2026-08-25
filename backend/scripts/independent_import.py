@@ -16,7 +16,7 @@ import asyncio
 import hashlib
 import json
 import shutil
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 OUT = Path("/data/exports/experiments/independent")
@@ -35,9 +35,9 @@ async def run(client, peer_identifier: str, chat_title: str) -> dict:
     OUT.mkdir(parents=True, exist_ok=True)
 
     # --- message_file: 3 messages; the middle one references a photo ---
-    d1 = datetime(2024, 1, 5, 10, 0, 0, tzinfo=timezone.utc)
-    d2 = datetime(2024, 1, 5, 10, 0, 30, tzinfo=timezone.utc)
-    d3 = datetime(2024, 1, 5, 10, 1, 0, tzinfo=timezone.utc)
+    d1 = datetime(2024, 1, 5, 10, 0, 0, tzinfo=UTC)
+    d2 = datetime(2024, 1, 5, 10, 0, 30, tzinfo=UTC)
+    d3 = datetime(2024, 1, 5, 10, 1, 0, tzinfo=UTC)
 
     # Photo file with a real WhatsApp-style filename
     src_photo = Path("/data/exports/_989394430100/David Rodriguez/archive/media/photo/photo_0.jpg")

@@ -39,7 +39,7 @@ async def main() -> None:
             client, release = await asyncio.wait_for(
                 sm.acquire_client(acc), timeout=20
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             print(f"acc{acc.id}: acquire TIMEOUT (lock wedged) — drop")
             await sm.drop(acc.id)
             continue
@@ -47,7 +47,7 @@ async def main() -> None:
             try:
                 me = await asyncio.wait_for(client.get_me(), timeout=10)
                 print(f"acc{acc.id}: healthy ({getattr(me, 'phone', '?')})")
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 print(f"acc{acc.id}: ZOMBIED — dropping from pool")
                 await sm.drop(acc.id)
                 print(f"acc{acc.id}: dropped")
