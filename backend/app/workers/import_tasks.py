@@ -447,9 +447,15 @@ async def _run_import_async(job_id: int, local_factory) -> dict:
 
                 recon_enabled = bool((job.options or {}).get("reconstruct_reactions"))
                 src_map = load_canonical_messages(export_dir / "archive")
-                mapping = recon.build_source_target_mapping(
-                    src_map[-limit:], target_dicts
-                )
+                # Authoritative mapping comes from the verifier's message_map
+                # (multi-field, already computed above).
+                mapping = {
+                    int(m["source_id"]): {"target_id": m["target_id"],
+                                          "match": m.get("match") or "exact",
+                                          "source_text": m.get("source_text", "")}
+                    for m in report.get("details", {}).get("message_map", [])
+                    if m.get("target_id") is not None
+                }
                 try:
                     me0 = await client.get_me()
                     # Sessions available to this worker (target account is this
@@ -506,10 +512,16 @@ async def _run_import_async(job_id: int, local_factory) -> dict:
                         build_sticker_recovery_report,
                     )
                     pok = export_dir / "verification"
+                    # The VERIFIER's mapping is authoritative for reporting.
+                    report_mapping = {
+                        int(m["source_id"]): {"target_id": m["target_id"]}
+                        for m in report.get("details", {}).get("message_map", [])
+                        if m.get("target_id") is not None
+                    }
                     build_reaction_recovery_report(
                         src_map, report.get("reaction_reconstruction"), pok)
                     build_sticker_recovery_report(src_map, target_dicts, pok,
-                                                  mapping=mapping)
+                                                  mapping=report_mapping)
                 except Exception:  # noqa: BLE001 — report is additive
                     logger.warning("Recovery report generation failed", exc_info=True)
 
