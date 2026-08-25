@@ -135,3 +135,39 @@ def test_verification_multi_field_not_text_only(tmp_path: Path):
     assert report["counts"]["matched_text_only"] == 1
     assert report["details"]["wrong_timestamp"]  # NOT_RESTORED
     assert report["checks"]["timestamp"] is False
+
+
+def test_verification_empty_text_media_not_swapped(tmp_path: Path):
+    """A sticker and a photo both have empty text. Matching must disambiguate by
+    media constructor so the sticker maps to MessageMediaDocument, not Photo."""
+    import json
+    d = tmp_path / "archive"
+    msgs = d / "messages"
+    msgs.mkdir(parents=True)
+    rows = [
+        {"id": 1, "date": "2020-01-01T10:00:00+00:00", "sender": {"id": 1, "name": "A"},
+         "text": "", "media": [{"type": "sticker", "filename": "s.webp"}]},
+        {"id": 2, "date": "2020-01-01T10:00:01+00:00", "sender": {"id": 1, "name": "A"},
+         "text": "", "media": [{"type": "photo", "filename": "p.jpg"}]},
+    ]
+    with (msgs / "messages.ndjson").open("w", encoding="utf-8") as f:
+        for r in rows:
+            f.write(json.dumps(r) + "\n")
+    target = [
+        {"id": 101, "date": "2026-08-25T09:00:00+00:00", "sender": {"id": 3, "name": "Imp"},
+         "text": "", "media": [], "has_media_object": True,
+         "target_media_raw": {"ctor": "MessageMediaPhoto", "attrs": [], "mime": None},
+         "fwd_from": {"date": "2020-01-01T10:00:01+00:00", "imported": True}},
+        {"id": 102, "date": "2026-08-25T09:00:01+00:00", "sender": {"id": 3, "name": "Imp"},
+         "text": "", "media": [], "has_media_object": True,
+         "target_media_raw": {"ctor": "MessageMediaDocument",
+                              "attrs": ["DocumentAttributeFilename"], "mime": "image/webp"},
+         "fwd_from": {"date": "2020-01-01T10:00:00+00:00", "imported": True}},
+    ]
+    report = run_verification(d, target)
+    mm = report["details"]["message_map"]
+    sticker = next(m for m in mm if m["source_id"] == 1)
+    photo = next(m for m in mm if m["source_id"] == 2)
+    # sticker -> document target; photo -> photo target (never swapped)
+    assert sticker["target_id"] == 102
+    assert photo["target_id"] == 101

@@ -193,9 +193,34 @@ class ImportVerification:
             match_kind = "exact"
             reason = "mapping key (timestamp+text+media+grouped)"
             if tgt is None:
-                # 2) Weak — same text (multiset-aware)
-                pending = target_by_text.get(stk)
-                if pending:
+                # 2) Weak — same text (multiset-aware). For empty-text MEDIA
+                #    messages, disambiguate by the actual media constructor so a
+                #    sticker never grabs a photo's target (and vice versa).
+                pending = target_by_text.get(stk) or []
+                src_media_types = {x.get("type") for x in src.get("media") or []}
+                if pending and src_media_types and not stk:
+                    media_types_local = src_media_types
+
+                    def _compat(t: dict, _types: set = media_types_local) -> bool:
+                        raw = t.get("target_media_raw") or {}
+                        ctor = raw.get("ctor") or ""
+                        if "photo" in _types:
+                            return ctor == "MessageMediaPhoto"
+                        if "sticker" in _types:
+                            return ctor == "MessageMediaDocument"
+                        return True  # unknown media type: accept first
+                    compat = [t for t in pending if _compat(t)]
+                    if compat:
+                        tgt = compat[0]
+                        pending.remove(tgt)
+                        match_kind = "text_only"
+                        reason = "text empty + media-constructor disambiguation"
+                    else:
+                        tgt = pending[0]
+                        pending.pop(0)
+                        match_kind = "text_only"
+                        reason = "text only (exact mapping key not found)"
+                elif pending:
                     tgt = pending[0]
                     pending.pop(0)
                     match_kind = "text_only"
