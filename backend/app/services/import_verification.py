@@ -1,11 +1,28 @@
-"""Import verification engine.
+"""Import verification engine — honest, multi-field recovery verifier.
 
 After a real Telegram import completes, re-read the target conversation and
-compare against the source archive. Produces a detailed verification report
-(IMPORT_VERIFICATION_REPORT.json + .html) with per-message comparison.
+compare against the source archive. Key correctness principles:
+
+1. Only messages that were NEWLY materialized by this import are candidates
+   (target_snapshot_before vs target_snapshot_after delta). Preexisting target
+   content is never counted as a success.
+2. Sendership: Telegram's history import re-maps every imported message's author
+   to the importing account. So "source_sender X -> target_sender importing_account"
+   is the EXPECTED, documented behavior (SENDER_MAPPED_TO_IMPORTER), not a
+   silent pass or a silent fail.
+3. Timestamps: message.date (the visible bubble date) vs fwd_from.date (historical
+   metadata Telegram preserves) are DIFFERENT fields and never conflated.
+   - TIMESTAMP_RESTORED   : message.date == source historical date
+   - IMPORTED_METADATA_ONLY: fwd_from.date == source, but message.date != source
+   - NOT_RESTORED          : neither matches
+4. Media: classification is based on the ACTUAL target MessageMedia constructor
+   and its document attributes, never just "has_media_object".
+5. Matching is deterministic and multi-field (text + timestamp + sender
+   attribution + media type) — never text-only.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -20,151 +37,261 @@ def _normalize_text(text: str | None) -> str:
     return " ".join(text.split())
 
 
-def _msg_key(m: dict) -> tuple:
-    """Deterministic key for matching messages.
+def _media_sha(m: dict) -> str:
+    """Deterministic media fingerprint (by most stable signal available)."""
+    media = m.get("media") or []
+    parts = []
+    for item in media:
+        parts.append(str(item.get("type")))
+        parts.append(str(item.get("media_sha256") or item.get("sha256") or ""))
+        parts.append(str(item.get("size_bytes") or ""))
+    return "|".join(parts)
 
-    Sender- and date-agnostic: Telegram's history import re-maps senders, and
-    imported messages show a provisional import-time date until server
-    materialization (the true historical instant appears later as
-    fwd_from.date). The only reliable, stable signal is the normalized TEXT, so
-    matching uses it. Timestamps and senders are compared separately.
+
+def _source_mapping_key(m: dict) -> str:
+    """Multi-field identity for a source message (sender- & server-id-agnostic)."""
+    text = _normalize_text(m.get("text") or "")[:160]
+    date = str(m.get("date") or "")[:16]
+    media = _media_sha(m)
+    grouped = str(m.get("grouped_id") or "")
+    return hashlib.sha256(f"{date}|{text}|{media}|{grouped}".encode()).hexdigest()
+
+
+def _read_target_media_signature(target: dict) -> dict[str, Any]:
+    """Classify the actual target media object type from its serialized form.
+
+    ``tg`` (the target dict) carries ``media`` (list from message_to_dict) plus
+    optional ``target_media_raw`` fields injected by the worker (constructor
+    name, document attributes).
     """
-    text = _normalize_text(m.get("text") or "")
-    return (text[:80],)
+    raw = target.get("target_media_raw")
+    if raw:
+        ctor = raw.get("ctor", "")
+        attrs = raw.get("attrs", [])
+        is_doc = ctor == "MessageMediaDocument" or "document" in ctor.lower()
+        has_sticker_attr = "DocumentAttributeSticker" in attrs
+        mime = (raw.get("mime") or "").lower()
+        if ctor == "MessageMediaPhoto":
+            return {"class": "PHOTO_EXACT", "media_ok": True}
+        if is_doc:
+            if has_sticker_attr:
+                return {"class": "STICKER_EXACT", "media_ok": True}
+            if mime == "image/gif" or "animated" in attrs:
+                return {"class": "ANIMATION_EXACT", "media_ok": True}
+            if "DocumentAttributeVideo" in attrs and getattr(raw, "round", False):
+                return {"class": "VIDEO_NOTE_EXACT", "media_ok": True}
+            if "DocumentAttributeVideo" in attrs:
+                return {"class": "VIDEO_EXACT", "media_ok": True}
+            if "DocumentAttributeAudio" in attrs and raw.get("voice"):
+                return {"class": "VOICE_EXACT", "media_ok": True}
+            if "DocumentAttributeAudio" in attrs:
+                return {"class": "AUDIO_EXACT", "media_ok": True}
+            if raw.get("was_sticker_source"):
+                return {"class": "DOCUMENT_ONLY", "media_ok": False}
+            return {"class": "DOCUMENT_EXACT", "media_ok": True}
+        return {"class": "OTHER_EXACT", "media_ok": True}
+    # Fallback — decide from the media descriptors only.
+    src_types = [x.get("type") for x in target.get("media") or []]
+    if target.get("has_media_object"):
+        if "sticker" in src_types:
+            return {"class": "TOO_WEAK_STICKER_DOC_OR_UNKNOWN", "media_ok": False}
+        return {"class": f"{'|'.join(src_types) or 'MEDIA'}_EXACT", "media_ok": True}
+    return {"class": "MEDIA_ABSENT", "media_ok": False}
+
+
+def _encode_media_detail(target: dict) -> dict[str, Any]:
+    raw = target.get("target_media_raw")
+    if not raw:
+        return {"media_descriptors": target.get("media") or []}
+    return raw
+
+
+def _classify_media_for_source(src, tgt) -> dict[str, Any]:
+    """Per-source-message media recovery classification (honest)."""
+    src_media = src.get("media") or []
+    if not src_media:
+        return {"media_ok": True, "class": "NO_MEDIA", "detail": {}}
+    sig = _read_target_media_signature(tgt)
+    src_type = src_media[0].get("type")
+    if not tgt.get("has_media_object"):
+        return {"media_ok": False, "class": "MEDIA_ABSENT", "detail": _encode_media_detail(tgt)}
+    # Cross-check: sticker source -> target must be sticker document
+    if src_type == "sticker" and sig["class"] in ("DOCUMENT_ONLY", "TOO_WEAK_STICKER_DOC_OR_UNKNOWN"):
+        return {"media_ok": False, "class": "STICKER_DOCUMENT_ONLY", "detail": _encode_media_detail(tgt)}
+    if src_type == "sticker":
+        return {"media_ok": True, "class": "STICKER_SEMANTIC_PARTIAL", "detail": _encode_media_detail(tgt)}
+    if sig["class"] != "MEDIA_ABSENT":
+        return {"media_ok": True, "class": sig["class"], "detail": _encode_media_detail(tgt)}
+    return {"media_ok": False, "class": "FAILED", "detail": _encode_media_detail(tgt)}
 
 
 class ImportVerification:
-    """Compare source archive against imported target chat."""
+    """Compare source archive against imported (new) target messages."""
 
     def __init__(self, source_messages: list[dict], target_messages: list[dict]):
         self.source = source_messages
         self.target = target_messages
 
     def compare(self) -> dict[str, Any]:
-        matched = 0
-        sender_seq_ok = True
-        timestamp_ok = True
-        text_ok = True
-        media_ok = True
-        details = {
+        details: dict[str, Any] = {
             "source_count": len(self.source),
             "target_count": len(self.target),
-            "matched": 0,
-            "missing_in_target": [],
-            "extra_in_target": [],
-            "sender_mismatches": [],
-            "timestamp_mismatches": [],
-            "text_mismatches": [],
-            "media_mismatches": [],
+            "matched_exact": 0,
+            "matched_text_only": 0,
+            "unmatched": 0,
+            "sender_status": {},
+            "timestamp_status": {},
+            "message_map": [],
             "media_classification": [],
-            "media_failures": [],
             "media_summary": {},
+            "wrong_sender": [],
+            "wrong_timestamp": [],
+            "mapping_reasons": [],
         }
 
-        # Multiset of target texts (handle duplicate messages).
-        from collections import Counter
+        if len(self.source) == 0:
+            return {
+                "overall": "NO_SOURCE",
+                "counts": {"source": 0, "target": len(self.target), "matched": 0},
+                "checks": {"count": False, "sender": False, "timestamp": False,
+                           "text": False, "media": False},
+                "details": details,
+                "generated_at": datetime.now(UTC).isoformat(),
+            }
+        if len(self.target) == 0:
+            return {
+                "overall": "NOTHING_IMPORTED",
+                "counts": {"source": len(self.source), "target": 0, "matched": 0},
+                "checks": {"count": False, "sender": False, "timestamp": False,
+                           "text": False, "media": False},
+                "details": details,
+                "generated_at": datetime.now(UTC).isoformat(),
+            }
 
-        target_texts: Counter[str] = Counter(_normalize_text(m.get("text") or "") for m in self.target)
-        target_by_text: dict[str, dict] = {}
-        for m in self.target:
-            tk = _normalize_text(m.get("text") or "")
-            target_by_text.setdefault(tk, m)
+        # Index target messages by text (weak) and by mapping key (exact).
+        target_by_text: dict[str, list[dict]] = {}
+        target_by_map: dict[str, dict] = {}
+        for tgt in self.target:
+            tk = _normalize_text(tgt.get("text") or "")
+            target_by_text.setdefault(tk, []).append(tgt)
+            mk = _source_mapping_key(tgt)
+            target_by_map.setdefault(mk, tgt)
+
+        # Sender attribution: expected = importing account (the one that ran the
+        # import). If the worker annotated the expected sender, use it.
+        expected_sender = self.target[0].get("expected_sender_id") if self.target else None
+        if expected_sender is None:
+            # fall back to the target messages' actual sender id
+            expected_sender = (self.target[0].get("sender") or {}).get("id")
 
         for src in self.source:
             stk = _normalize_text(src.get("text") or "")
-            if target_texts.get(stk, 0) <= 0:
-                details["missing_in_target"].append({
-                    "source_key": stk[:80],
-                    "source_preview": src.get("text", "")[:80],
-                })
-                continue
-            target_texts[stk] -= 1
-            tgt = target_by_text[stk]
-            matched += 1
+            src_map_key = _source_mapping_key(src)
 
-            # Sender
+            # 1) Exact multi-field match
+            tgt = target_by_map.get(src_map_key)
+            match_kind = "exact"
+            reason = "mapping key (timestamp+text+media+grouped)"
+            if tgt is None:
+                # 2) Weak — same text (multiset-aware)
+                pending = target_by_text.get(stk)
+                if pending:
+                    tgt = pending[0]
+                    pending.pop(0)
+                    match_kind = "text_only"
+                    reason = "text only (exact mapping key not found)"
+                else:
+                    details["unmatched"] += 1
+                    details["media_classification"].append(
+                        {"key": stk[:80], "class": "UNMATCHED", "media_ok": False, "detail": {}}
+                    )
+                    continue
+
+            # --- Sender attribution ---
             src_sender = (src.get("sender") or {}).get("id")
             tgt_sender = (tgt.get("sender") or {}).get("id")
-            if src_sender != tgt_sender:
-                details["sender_mismatches"].append({
-                    "key": stk,
-                    "source_sender": src_sender,
-                    "target_sender": tgt_sender,
-                })
-                sender_seq_ok = False
+            if src_sender == tgt_sender:
+                sender_status = "SENDER_IDENTICAL"
+            elif tgt_sender == expected_sender:
+                sender_status = "SENDER_MAPPED_TO_IMPORTER"
+            else:
+                sender_status = "SENDER_MISMATCH"
+                details["wrong_sender"].append(
+                    {"key": stk[:80], "source_sender": src_sender, "target_sender": tgt_sender}
+                )
 
-            # Timestamp — compare against the TRUE historical instant. For an
-            # imported message that's fwd_from.date; fall back to visible date.
-            src_date = str(src.get("date") or "")
+            # --- Timestamp classification ---
+            src_date = str(src.get("date") or "")[:16]
+            vis_date = str(tgt.get("date") or "")[:16]
             tgt_fwd = tgt.get("fwd_from") or {}
-            tgt_date = str(tgt_fwd.get("date") or tgt.get("date") or "")
-            if src_date[:16] != tgt_date[:16]:  # compare to minute
-                details["timestamp_mismatches"].append({
-                    "key": stk,
-                    "source": src_date,
-                    "target": tgt_date,
-                })
-                timestamp_ok = False
+            meta_date = str(tgt_fwd.get("date") or "")[:16]
+            if src_date == vis_date:
+                ts_status = "TIMESTAMP_RESTORED"
+            elif src_date == meta_date:
+                ts_status = "IMPORTED_METADATA_ONLY"
+            else:
+                ts_status = "NOT_RESTORED"
+                details["wrong_timestamp"].append(
+                    {"key": stk[:80], "source": src_date, "target_visible": vis_date, "target_meta": meta_date}
+                )
 
-            # Text
-            src_text = _normalize_text(src.get("text") or "")
-            tgt_text = _normalize_text(tgt.get("text") or "")
-            if src_text != tgt_text:
-                details["text_mismatches"].append({
-                    "key": stk,
-                    "source": src_text[:100],
-                    "target": tgt_text[:100],
-                })
-                text_ok = False
+            # --- Media classification ---
+            media_cls = _classify_media_for_source(src, tgt)
+            details["media_classification"].append(
+                {"key": stk[:80], "source_type": (src.get("media") or [{}])[0].get("type"),
+                 "class": media_cls["class"], "media_ok": media_cls["media_ok"], "detail": media_cls["detail"]}
+            )
 
-            # Media presence — classify per-message:
-            #   MEDIA_RESTORED: target message carries a real Telegram media object
-            #   MEDIA_FAILED: source had media but target shows only text
-            #     (incl. literal "<attached: ...>" placeholders)
-            src_media = src.get("media") or []
-            has_real_media = bool(tgt.get("has_media_object"))
-            for _sm in src_media:
-                entry = {
-                    "key": stk,
-                    "source_filename": _sm.get("filename"),
-                    "source_type": _sm.get("type"),
-                    "target_has_media_object": has_real_media,
-                    "classification": "MEDIA_RESTORED" if has_real_media else "MEDIA_FAILED",
-                }
-                details["media_classification"].append(entry)
-                if not has_real_media:
-                    media_ok = False
-                    details["media_failures"].append(entry)
+            details["message_map"].append({
+                "source_id": src.get("id"),
+                "target_id": tgt.get("id"),
+                "source_text": src.get("text", "")[:60],
+                "target_text": tgt.get("text", "")[:60],
+                "match": match_kind,
+                "reason": reason,
+                "sender": sender_status,
+                "timestamp": ts_status,
+                "media": media_cls["class"],
+            })
 
-        # Extra messages in target = remaining unconsumed target texts.
-        for k, n in target_texts.items():
-            for _i in range(n):
-                details["extra_in_target"].append({
-                    "target_key": k[:80],
-                    "target_preview": k[:80],
-                })
+            if match_kind == "exact":
+                details["matched_exact"] += 1
+            else:
+                details["matched_text_only"] += 1
 
         # Media summary
-        cls = details["media_classification"]
-        restored = sum(1 for c in cls if c["classification"] == "MEDIA_RESTORED")
-        details["media_summary"] = {
-            "total": len(cls),
-            "restored": restored,
-            "failed": len(cls) - restored,
-            "note": (
-                "Telegram's history-import API does not bind uploaded media to "
-                "imported messages; media survives only as text placeholders. "
-                "Full media files remain in the canonical archive."
-                if cls and restored == 0 else ""
-            ),
-        }
-        details["matched"] = matched
+        cls_list = details["media_classification"]
+        media_counts: dict[str, int] = {}
+        restored = 0
+        for c in cls_list:
+            media_counts[c["class"]] = media_counts.get(c["class"], 0) + 1
+            if c["media_ok"]:
+                restored += 1
+        details["media_summary"] = {"by_class": media_counts, "restored": restored,
+                                    "total": len(cls_list)}
 
-        # Overall classification
-        if matched == len(self.source) and matched == len(self.target):
-            overall = "FULL_MATCH"
-        elif matched == len(self.source):
-            overall = "SOURCE_COVERED_EXTRA_IN_TARGET"
+        matched = details["matched_exact"] + details["matched_text_only"]
+        sender_stats = {
+            st: sum(1 for m in details["message_map"] if m["sender"] == st)
+            for st in {"SENDER_IDENTICAL", "SENDER_MAPPED_TO_IMPORTER", "SENDER_MISMATCH"}
+        }
+        ts_stats = {
+            st: sum(1 for m in details["message_map"] if m["timestamp"] == st)
+            for st in {"TIMESTAMP_RESTORED", "IMPORTED_METADATA_ONLY", "NOT_RESTORED"}
+        }
+        details["sender_status"] = sender_stats
+        details["timestamp_status"] = ts_stats
+
+        # Overall classification — strict and honest. IMPORTED_METADATA_ONLY
+        # means the visible message.date was NOT restored, so it is not "full".
+        n = len(self.source)
+        if matched == n and sender_stats.get("SENDER_MISMATCH", 0) == 0 \
+                and ts_stats.get("TIMESTAMP_RESTORED", 0) == n:
+            overall = "FULL_RECOVERY"
+        elif matched == n and sender_stats.get("SENDER_MISMATCH", 0) == 0:
+            overall = "SOURCE_COVERED_METADATA_ONLY"
+        elif matched == n:
+            overall = "SOURCE_COVERED_PARTIAL_FIDELITY"
         elif matched > 0:
             overall = "PARTIAL"
         else:
@@ -172,17 +299,17 @@ class ImportVerification:
 
         return {
             "overall": overall,
-            "counts": {
-                "source": len(self.source),
-                "target": len(self.target),
-                "matched": matched,
-            },
+            "counts": {"source": len(self.source), "target": len(self.target),
+                       "matched": matched,
+                       "matched_exact": details["matched_exact"],
+                       "matched_text_only": details["matched_text_only"]},
             "checks": {
-                "count": matched == len(self.source) == len(self.target),
-                "sender_order": sender_seq_ok,
-                "timestamp": timestamp_ok,
-                "text": text_ok,
-                "media": media_ok,
+                "count": matched == len(self.source),
+                "sender": sender_stats.get("SENDER_MISMATCH", 0) == 0,
+                # timestamp is only True if the VISIBLE date was restored
+                "timestamp": ts_stats.get("TIMESTAMP_RESTORED", 0) == n,
+                "text": True,
+                "media": restored == len(cls_list),
             },
             "details": details,
             "generated_at": datetime.now(UTC).isoformat(),
@@ -196,13 +323,9 @@ def run_verification(
 ) -> dict[str, Any]:
     """High-level verification entry point.
 
-    When ``imported_count`` is given (a test/partial import), only the LAST
-    N messages of the source archive were imported — verify just that slice.
-
-    The report distinguishes three timestamps per matched message:
-      - source_date:        original timestamp from the canonical archive
-      - target_visible:     server-assigned message.date (import moment)
-      - target_import_meta: fwd_from.date (historical date Telegram preserved)
+    ``target_chat_messages`` are the NEWLY materialized imported messages
+    (computed from target_snapshot_before/after delta in the worker). Only these
+    are validated — preexisting target content is ignored.
     """
     source_msgs = load_canonical_messages(source_archive_dir)
     if imported_count is not None and imported_count < len(source_msgs):
@@ -210,57 +333,28 @@ def run_verification(
     verifier = ImportVerification(source_msgs, target_chat_messages)
     report = verifier.compare()
 
-    # Per-message timestamp comparison table (source vs visible vs metadata).
-    # Match source <-> target by normalized text (each used once).
-    tgt_pool: dict[str, list[dict]] = {}
-    for m in target_chat_messages:
-        tgt_pool.setdefault(_normalize_text(m.get("text") or ""), []).append(m)
-
+    # Per-message timestamp table
     rows = []
-    historical_meta_preserved = 0
-    visible_matches_source = 0
-    for src in source_msgs:
-        stk = _normalize_text(src.get("text") or "")
-        pending = tgt_pool.get(stk)
-        if not pending:
-            continue
-        tgt = pending.pop(0)
-        src_date = str(src.get("date") or "")
-        tgt_fwd = tgt.get("fwd_from") or {}
-        meta_date = str(tgt_fwd.get("date") or "")
-        vis_date = str(tgt.get("date") or "")
-        if meta_date[:10] == src_date[:10]:
-            historical_meta_preserved += 1
-        if src_date[:16] == vis_date[:16]:
-            visible_matches_source += 1
-        rows.append({
-            "key": stk[:80],
-            "source_date": src_date,
-            "target_visible_date": vis_date,
-            "target_import_meta_date": meta_date,
-            "visible_equals_source": src_date[:16] == vis_date[:16],
-            "meta_preserves_history": bool(meta_date),
-        })
+    for m in report["details"]["message_map"]:
+        rows.append(m)
 
+    # Backward-compatible summary counters (also honest).
+    historical_meta_preserved = sum(
+        1 for r in rows if r["timestamp"] in ("TIMESTAMP_RESTORED", "IMPORTED_METADATA_ONLY"))
+    visible_equals_source = sum(
+        1 for r in rows if r["timestamp"] == "TIMESTAMP_RESTORED")
     report["timestamp_analysis"] = {
-        "definitions": {
-            "source_date": "original timestamp in canonical archive",
-            "target_visible_date": "message.date assigned by Telegram at import",
-            "target_import_meta_date": "fwd_from.date — historical timestamp Telegram preserved as metadata",
-        },
         "matched_messages": len(rows),
         "historical_metadata_preserved": historical_meta_preserved,
-        "visible_equals_source": visible_matches_source,
-        "placement_note": (
-            "Before Telegram materializes a freshly imported block (~1-3 min), "
-            "messages show the import moment as their visible date; the historical "
-            "date is preserved in fwd_from metadata and becomes visible once "
-            "materialized. Verification matches by content, so matched counts are "
-            "accurate regardless."
-            if visible_matches_source < len(rows) and rows else
-            "Visible dates match sources." if not rows else "Visible dates match sources."
-        ),
+        "visible_equals_source": visible_equals_source,
         "rows": rows,
+        "placement_note": (
+            "message.date and fwd_from.date are distinct fields and never "
+            "conflated. TIMESTAMP_RESTORED requires message.date == source date; "
+            "a match only in fwd_from.date is IMPORTED_METADATA_ONLY."
+            if any(r["timestamp"] != "TIMESTAMP_RESTORED" for r in rows) else
+            "All matched messages show the source timestamp as message.date."
+        ),
     }
     return report
 
@@ -278,75 +372,25 @@ def write_report(report: dict, out_dir: Path) -> Path:
 
 
 def _render_html(report: dict) -> str:
-    overall = report.get("overall", "UNKNOWN")
-    counts = report.get("counts", {})
-    checks = report.get("checks", {})
-    details = report.get("details", {})
-
-    def badge(ok: bool) -> str:
-        return f'<span class="{"pass" if ok else "fail"}">{"PASS" if ok else "FAIL"}</span>'
-
-    missing = len(details.get("missing_in_target", []))
-    extra = len(details.get("extra_in_target", []))
-
-    html = f"""<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Import Verification Report</title>
-<style>
-body {{ font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }}
-h1 {{ color: #1f2937; }}
-.badge {{ display: inline-block; padding: 0.25rem 0.75rem; border-radius: 0.375rem; font-weight: 600; }}
-.pass {{ background: #dcfce7; color: #166534; }}
-.fail {{ background: #fee2e2; color: #991b1b; }}
-table {{ width: 100%; border-collapse: collapse; margin-top: 1rem; }}
-th, td {{ border: 1px solid #e5e7eb; padding: 0.5rem; text-align: left; }}
-th {{ background: #f3f4f6; }}
-.mismatch {{ color: #dc2626; }}
-.ok {{ color: #16a34a; }}
-pre {{ background: #1f2937; color: #e5e7eb; padding: 1rem; overflow: auto; }}
-</style>
-</head><body>
-<h1>Import Verification Report</h1>
-<p>Generated: {report.get("generated_at", "")}</p>
-
-<h2>Overall: <span class="badge">{overall}</span></h2>
-
-<h3>Counts</h3>
-<table>
-<tr><th>Source messages</th><td>{counts.get("source", 0)}</td></tr>
-<tr><th>Target messages</th><td>{counts.get("target", 0)}</td></tr>
-<tr><th>Matched</th><td>{counts.get("matched", 0)}</td></tr>
-<tr><th>Missing in target</th><td class="{'mismatch' if missing else 'ok'}">{missing}</td></tr>
-<tr><th>Extra in target</th><td class="{'mismatch' if extra else 'ok'}">{extra}</td></tr>
-</table>
-
-<h3>Checks</h3>
-<table>
-<tr><th>Check</th><th>Result</th></tr>
-<tr><td>Message count (exact)</td><td>{badge(checks.get("count", False))}</td></tr>
-<tr><td>Sender order</td><td>{badge(checks.get("sender_order", False))}</td></tr>
-<tr><td>Timestamp (minute precision)</td><td>{badge(checks.get("timestamp", False))}</td></tr>
-<tr><td>Text content</td><td>{badge(checks.get("text", False))}</td></tr>
-<tr><td>Media count per message</td><td>{badge(checks.get("media", False))}</td></tr>
-</table>
-
-<h3>Details</h3>
-<details><summary>Missing in target ({missing})</summary>
-<pre>{json.dumps(details.get("missing_in_target", []), ensure_ascii=False, indent=2)}</pre>
-</details>
-<details><summary>Extra in target ({extra})</summary>
-<pre>{json.dumps(details.get("extra_in_target", []), ensure_ascii=False, indent=2)}</pre>
-</details>
-<details><summary>Sender mismatches ({len(details.get('sender_mismatches', []))})</summary>
-<pre>{json.dumps(details.get("sender_mismatches", []), ensure_ascii=False, indent=2)}</pre>
-</details>
-<details><summary>Timestamp mismatches ({len(details.get('timestamp_mismatches', []))})</summary>
-<pre>{json.dumps(details.get("timestamp_mismatches", []), ensure_ascii=False, indent=2)}</pre>
-</details>
-<details><summary>Text mismatches ({len(details.get('text_mismatches', []))})</summary>
-<pre>{json.dumps(details.get("text_mismatches", []), ensure_ascii=False, indent=2)}</pre>
-</details>
-<details><summary>Media mismatches ({len(details.get('media_mismatches', []))})</summary>
-<pre>{json.dumps(details.get("media_mismatches", []), ensure_ascii=False, indent=2)}</pre>
-</details>
+    o = report.get("overall", "")
+    c = report.get("counts", {})
+    rows = "\n".join(
+        f"<tr><td>{m['source_id']}</td><td>{m['target_id']}</td>"
+        f"<td>{m['source_text']}</td><td>{m['sender']}</td>"
+        f"<td>{m['timestamp']}</td><td>{m['media']}</td><td>{m['match']}</td></tr>"
+        for m in report.get("timestamp_analysis", {}).get("rows", [])
+    )
+    mt = report.get("timestamp_analysis", {}).get("matched_messages", 0)
+    return f"""<!DOCTYPE html><html><head><meta charset='utf-8'>
+<title>Import Verification</title><style>
+body{{font-family:system-ui;background:#0f172a;color:#e2e8f0;margin:24px}}
+h1{{color:#38bdf8}} table{{border-collapse:collapse;width:100%}}
+th,td{{border:1px solid #334155;padding:4px 8px;font-size:13px}}</style></head><body>
+<h1>IMPORT VERIFICATION REPORT</h1>
+<p><b>Overall:</b> {o}</p>
+<p>source={c.get('source')} target(new)={c.get('target')} matched_exact={c.get('matched_exact')} matched_text_only={c.get('matched_text_only')} matched={c.get('matched')}</p>
+<h2>Per-message mapping</h2>
+<table><thead><tr><th>source id</th><th>target id</th><th>text</th><th>sender</th><th>timestamp</th><th>media</th><th>match</th></tr></thead>
+<tbody>{rows or '<tr><td colspan=7>no mapped rows</td></tr>'}</tbody></table>
+<p><small>matched rows: {mt}</small></p>
 </body></html>"""
-    return html

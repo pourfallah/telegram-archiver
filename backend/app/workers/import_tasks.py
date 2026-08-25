@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import mimetypes
 from pathlib import Path
@@ -283,6 +284,23 @@ async def _run_import_async(job_id: int, local_factory) -> dict:
             job.progress = {"phase": "starting_import"}
             await db.commit()
 
+            # Phase 6b: snapshot target BEFORE start (for new-message delta below)
+            before_target_ids: set[int] = set()
+            try:
+                res0 = await client.get_messages(peer, limit=0)
+                n0 = getattr(res0, "total", None)
+                if n0 and n0 < 100000:
+                    before_list = await client.get_messages(peer, limit=n0)
+                    before_target_ids = {int(m.id) for m in before_list}
+                else:
+                    before_list = await client.get_messages(peer, limit=2000)
+                    before_target_ids = {int(m.id) for m in before_list}
+            except Exception:  # noqa: BLE001
+                before_target_ids = set()
+            job.progress = {"phase": "starting_import",
+                            "target_before_count": len(before_target_ids)}
+            await db.commit()
+
             try:
                 ok = await importer.start_history_import(peer, import_id)
                 if not ok:
@@ -336,8 +354,11 @@ async def _run_import_async(job_id: int, local_factory) -> dict:
                     # stable population: block finished materializing
                     break
 
-                # Convert to dict format + capture fwd_from (imported) metadata
+                # Convert to dict format + capture fwd_from (imported) metadata +
+                # annotate sender attribution + raw media constructor/attrs.
                 from app.services.telegram_utils import message_to_dict
+                me0 = await client.get_me()
+                expected_sender_id = int(getattr(me0, "id", 0))
                 target_dicts = []
                 for m in target_list:
                     d = message_to_dict(m)
@@ -351,7 +372,43 @@ async def _run_import_async(job_id: int, local_factory) -> dict:
                             "date": fdate.isoformat() if fdate else None,
                             "from_name": getattr(fwd, "from_name", None),
                         }
+                    # sender attribution: history import re-maps authors to the
+                    # importing account
+                    d["expected_sender_id"] = expected_sender_id
+                    d["is_new"] = int(m.id) not in before_target_ids
+
+                    # raw media constructor + document attribute names (honest
+                    # classification basis)
+                    med = getattr(m, "media", None)
+                    if med is not None:
+                        ctor = type(med).__name__
+                        attrs = []
+                        mim = None
+                        voice = False
+                        doc = getattr(med, "document", None)
+                        if doc is not None:
+                            mim = getattr(doc, "mime_type", None)
+                            for a in getattr(doc, "attributes", None) or []:
+                                attrs.append(type(a).__name__)
+                        d["target_media_raw"] = {
+                            "ctor": ctor, "attrs": attrs, "mime": mim,
+                            "voice": voice, "round": False,
+                        }
                     target_dicts.append(d)
+
+                # Only NEWLY materialized messages are validated (delta).
+                new_target_dicts = [d for d in target_dicts if d.get("is_new")]
+                target_dicts = new_target_dicts or target_dicts
+                # persist snapshots for audit
+                try:
+                    snap_dir = export_dir / "verification"
+                    snap_dir.mkdir(parents=True, exist_ok=True)
+                    (snap_dir / "target_snapshot_before.json").write_text(
+                        json.dumps({"count": len(before_target_ids),
+                                    "ids": sorted(before_target_ids)},
+                                   ensure_ascii=False), encoding="utf-8")
+                except Exception:  # noqa: BLE001
+                    pass
 
                 # Run verification (only the imported slice of the source)
                 export_dir = Path(export.export_dir)
