@@ -30,24 +30,93 @@ async def _build_input_media(client, info: dict):
     """Build InputMedia for uploadImportedMedia from media info.
 
     The file must first be uploaded to Telegram to obtain an InputFile handle.
+    Attributes follow the source media type (filippz/telegram_import +
+    tdlib's get_fake_input_media): sticker/video/audio attributes are sent so
+    the server can restore semantics where the protocol permits.
     """
     from telethon.tl.types import (
+        DocumentAttributeAnimated,
+        DocumentAttributeAudio,
         DocumentAttributeFilename,
+        DocumentAttributeImageSize,
+        DocumentAttributeSticker,
+        DocumentAttributeVideo,
         InputMediaUploadedDocument,
         InputMediaUploadedPhoto,
+        InputStickerSetEmpty,
     )
 
     handle = await client.upload_file(info["path"], file_name=info["path"].name)
     mime = info.get("mime") or "application/octet-stream"
     media_type = info.get("type") or "document"
+    extra = info.get("extra") or {}
 
-    if media_type == "photo" or mime.startswith("image/"):
+    if media_type == "photo" or (mime.startswith("image/") and mime != "image/webp"):
         return InputMediaUploadedPhoto(file=handle)
+
+    attributes = []
+    if media_type == "sticker":
+        # alt emoji + empty stickerset: server may upgrade semantics
+        attributes.append(DocumentAttributeSticker(
+            alt=str(extra.get("alt") or ""), stickerset=InputStickerSetEmpty()))
+        w, h = extra.get("width"), extra.get("height")
+        if w and h:
+            attributes.append(DocumentAttributeImageSize(w=int(w), h=int(h)))
+    elif media_type == "animation" or media_type == "gif":
+        attributes.append(DocumentAttributeAnimated())
+    elif media_type in ("video",):
+        attributes.append(DocumentAttributeVideo(
+            duration=int(float(extra.get("duration") or 0) or 0),
+            w=int(extra.get("width") or 0) or None,
+            h=int(extra.get("height") or 0) or None))
+    elif media_type == "audio":
+        attributes.append(DocumentAttributeAudio(
+            duration=int(float(extra.get("duration") or 0) or 0),
+            performer=extra.get("performer"), title=extra.get("title")))
+    elif media_type == "voice":
+        attributes.append(DocumentAttributeAudio(voice=True,
+            duration=int(float(extra.get("duration") or 0) or 0)))
+    if not any(isinstance(a, DocumentAttributeFilename) for a in attributes):
+        attributes.append(DocumentAttributeFilename(file_name=info["path"].name))
+
     return InputMediaUploadedDocument(
         file=handle,
         mime_type=mime,
-        attributes=[DocumentAttributeFilename(file_name=info["path"].name)],
+        attributes=attributes,
     )
+
+
+def _media_extra(export, filename: str) -> dict:
+    """Type-specific metadata for rich upload attributes (sticker alt/dims,
+    audio performer/title, video duration) from the canonical archive."""
+    return _MEDIA_EXTRA_CACHE.get((export.id, filename)) or {}
+
+
+def _message_ids_for_filename(export_dir, filename: str) -> list[int]:
+    """Source message ids whose canonical media references this filename."""
+    out = []
+    try:
+        for ndjson in sorted((Path(export_dir) / "archive" / "messages").glob("*.ndjson")) + \
+                [Path(export_dir) / "messages.jsonl"]:
+            if not ndjson.exists():
+                continue
+            for ln in ndjson.read_text(encoding="utf-8").splitlines():
+                if not ln.strip():
+                    continue
+                try:
+                    row = json.loads(ln)
+                except json.JSONDecodeError:
+                    continue
+                if any((med.get("filename") == filename or
+                        med.get("original_filename") == filename)
+                       for med in (row.get("media") or [])):
+                    out.append(int(row.get("id") or 0))
+    except Exception:  # noqa: BLE001
+        return out
+    return sorted(set(out))
+
+
+_MEDIA_EXTRA_CACHE: dict[tuple, dict] = {}
 
 
 @celery_app.task(bind=True, max_retries=3, default_retry_delay=60)
@@ -224,8 +293,50 @@ async def _run_import_async(job_id: int, local_factory) -> dict:
             wanted: set[str] = set()
             import_text = import_file.read_text(encoding="utf-8")
             import re as _re
+
+            # Prime type-specific metadata (sticker alt/dims, audio attrs) from
+            # the canonical archive so _build_input_media can send rich
+            # attributes for uploadImportedMedia.
+            _MEDIA_EXTRA_CACHE.clear()
+            try:
+                for ndjson in sorted((Path(export_dir) / "archive" / "messages").glob("*.ndjson")):
+                    for ln in ndjson.read_text(encoding="utf-8").splitlines():
+                        if not ln.strip():
+                            continue
+                        row = json.loads(ln)
+                        for med in row.get("media") or []:
+                            fname = med.get("filename") or med.get("original_filename")
+                            if not fname:
+                                continue
+                            extra = {}
+                            if med.get("sticker_alt") or med.get("alt"):
+                                extra["alt"] = med.get("sticker_alt") or med.get("alt")
+                            if med.get("width"):
+                                extra["width"] = med.get("width")
+                            if med.get("height"):
+                                extra["height"] = med.get("height")
+                            if med.get("duration"):
+                                extra["duration"] = med.get("duration")
+                            if med.get("performer"):
+                                extra["performer"] = med.get("performer")
+                            if med.get("title"):
+                                extra["title"] = med.get("title")
+                            if extra:
+                                _MEDIA_EXTRA_CACHE[(export.id, fname)] = extra
+            except Exception:  # noqa: BLE001 — enrichment is additive
+                logger.warning("media extra priming failed", exc_info=True)
+            # Marker syntax: "{file} (file attached)" (verified) — also accept
+            # the legacy "<attached: {file}>" for older packages.
+            for m in _re.finditer(r"^.*?:\s*(.+?) \(file attached\)", import_text, _re.M):
+                wanted.add(m.group(1).strip())
             for m in _re.finditer(r"<attached:\s*([^>]+)>", import_text):
                 wanted.add(m.group(1).strip())
+
+            def _first_marker_line(fname: str) -> str:
+                for ln in import_text.splitlines():
+                    if f"{fname} (file attached)" in ln or f"<attached: {fname}>" in ln:
+                        return ln
+                return ""
 
             media_map: dict[str, dict] = {}
             if media_src.exists():
@@ -238,6 +349,10 @@ async def _run_import_async(job_id: int, local_factory) -> dict:
                                 "path": media_file,
                                 "type": media_type_dir.name,
                                 "mime": _guess_mime(media_file),
+                                "extra": _media_extra(export, media_file.name),
+                                "message_ids": _message_ids_for_filename(
+                                    export_dir, media_file.name),
+                                "first_line": _first_marker_line(media_file.name),
                             })
             # If nothing matched by name (e.g. archive filenames differ from the
             # marker), still fall back to every file so media isn't silently dropped.
@@ -251,10 +366,15 @@ async def _run_import_async(job_id: int, local_factory) -> dict:
                                     "path": media_file,
                                     "type": media_type_dir.name,
                                     "mime": _guess_mime(media_file),
+                                    "extra": _media_extra(export, media_file.name),
+                                    "message_ids": _message_ids_for_filename(
+                                        export_dir, media_file.name),
+                                    "first_line": _first_marker_line(media_file.name),
                                 })
 
             # Upload each media file
             uploaded_tokens = {}
+            media_trace = []  # requirement: trace the final import association
             for idx, (filename, info) in enumerate(media_map.items()):
                 job.progress = {"phase": "media_uploading", "uploaded": idx, "total": media_count, "current_file": filename}
                 await db.commit()
@@ -262,17 +382,40 @@ async def _run_import_async(job_id: int, local_factory) -> dict:
                 try:
                     # Upload the media file (first to Telegram, then attach to import)
                     media = await _build_input_media(client, info)
+                    input_ctor = type(media).__name__
                     token = await importer.upload_imported_media(
                         peer, import_id, filename, media
                     )
                     uploaded_tokens[filename] = token
-                    logger.info(f"Uploaded media {filename}: {token}")
+                    token_ctor = type(token).__name__ if token is not None else None
+                    token_doc_id = getattr(getattr(token, "document", None), "id", None)
+                    token_photo_id = getattr(getattr(token, "photo", None), "id", None)
+                    media_trace.append({
+                        "source_message_id": (info.get("message_ids") or [None])[0],
+                        "filename": filename,
+                        "media_type": info.get("type"),
+                        "input_media_ctor": input_ctor,
+                        "returned_ctor": token_ctor,
+                        "returned_document_id": token_doc_id,
+                        "returned_photo_id": token_photo_id,
+                        "import_file_line": f"{info.get('first_line', '')}",
+                    })
+                    logger.info(f"Uploaded media {filename}: {token_ctor} doc={token_doc_id} photo={token_photo_id}")
                 except ImportProtocolError as exc:
                     job.status = "failed"
                     job.error = f"Media upload failed for {filename}: {exc.error_code} — {exc.message}"
                     await db.commit()
                     await release()
                     return {"error": job.error}
+
+            # Persist the association trace next to the import package so the
+            # mapping source_message -> filename -> server token is auditable.
+            try:
+                (Path(export_dir) / "MEDIA_ASSOCIATION_TRACE.json").write_text(
+                    json.dumps(media_trace, ensure_ascii=False, indent=2),
+                    encoding="utf-8")
+            except Exception:  # noqa: BLE001 — trace is additive
+                logger.warning("Could not write MEDIA_ASSOCIATION_TRACE.json", exc_info=True)
 
             # Phase 5b: Media uploaded — Telegram matches tokens to the import
             # file by filename (the <attached: filename> lines), no splicing needed.
@@ -445,7 +588,7 @@ async def _run_import_async(job_id: int, local_factory) -> dict:
                 # ---- PHASE B: post-import reconstruction (opt-in, safety-gated) ----
                 from app.services import reconstruction as recon
 
-                recon_enabled = bool((job.options or {}).get("reconstruct_reactions"))
+                recon_enabled = bool((job.options or {}).get("reconstruct_reactions", True))
                 src_map = load_canonical_messages(export_dir / "archive")
                 # Authoritative mapping comes from the verifier's message_map
                 # (multi-field, already computed above).
@@ -458,11 +601,47 @@ async def _run_import_async(job_id: int, local_factory) -> dict:
                 }
                 try:
                     me0 = await client.get_me()
-                    # Sessions available to this worker (target account is this
-                    # client; the source account is a different session that the
-                    # worker does not act as unless explicitly wired).
+                    # Every authenticated session may act AS ITSELF. The worker
+                    # resolves reactor -> that user's own client on demand.
                     available_sessions: set[int] = {int(getattr(me0, "id", 0))}
                     src_me_id = None
+
+                    async def _resolve_reactor_session(reactor_id: int):
+                        """Return (client, release, view_peer) for a reactor's
+                        OWN authenticated session, or None. READ-ONLY use of
+                        other sessions' identity — they act as themselves."""
+                        from sqlalchemy import select as _sel2
+
+                        async with local_factory() as db3:
+                            rows = await db3.scalars(_sel2(TelegramSession))
+                            accounts = list(rows)
+                        for acc in accounts:
+                            if acc.status != "active":
+                                continue
+                            rx_client, rx_release = await manager.acquire_client(acc)
+                            try:
+                                rx_me = await rx_client.get_me()
+                            except Exception:  # noqa: BLE001
+                                await rx_release()
+                                continue
+                            if int(getattr(rx_me, "id", 0)) != int(reactor_id):
+                                await rx_release()
+                                continue
+                            # resolve the shared peer FROM this session's view
+                            try:
+                                rx_peer = await rx_client.get_input_entity(
+                                    int(export.chat_id) if export.chat_type != "private"
+                                    else job.target_peer_id)
+                            except Exception:  # noqa: BLE001
+                                rx_peer = None
+                            if rx_peer is None:
+                                await rx_release()
+                                continue
+                            return rx_client, rx_release, rx_peer
+                        return None
+
+                    if src_me_id is None:
+                        pass
                     try:
                         from sqlalchemy import select as _sel
 
@@ -489,7 +668,9 @@ async def _run_import_async(job_id: int, local_factory) -> dict:
                     if recon_enabled:
                         outcomes = await recon.reconstruct_reactions(
                             client, peer, plan,
-                            new_target_ids={d.get("id") for d in target_dicts})
+                            new_target_ids={d.get("id") for d in target_dicts},
+                            session_resolver=_resolve_reactor_session,
+                        )
                     else:
                         outcomes = [{**p, "outcome": "PLAN_ONLY_DISABLED"} for p in plan]
                     report["reaction_reconstruction"] = {

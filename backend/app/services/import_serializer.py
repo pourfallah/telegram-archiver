@@ -75,9 +75,18 @@ def _escape(text: str) -> str:
 
 
 def _media_marker(filename: str, media_type: str) -> str:
-    """Generate a media reference line."""
-    # Telegram import format uses <attached: filename> or <media: filename>
-    return f"<attached: {filename}>"
+    """Media reference token for the WhatsApp-style import format.
+
+    VERIFIED SYNTAX (independent implementation filippz/telegram_import +
+    tdlib MessageImportManager.cpp):
+      "{ts} - {sender}: {filename} (file attached)"          -> MEDIA ONLY
+      "{ts} - {sender}: {filename} (file attached)\\n{caption}" -> MEDIA + CAPTION
+                                                               as ONE message
+    The caption belongs INSIDE the same message block: the first physical line
+    carries the timestamp/sender/media marker, continuation lines (no new
+    timestamp prefix) are the caption of THAT media message.
+    """
+    return f"{filename} (file attached)"
 
 
 def build_import_file(
@@ -155,24 +164,31 @@ def build_import_file(
                 users.add(str(sid))
             dates.append(ts)
 
-            # Media lines come AFTER the message they belong to
+            # ONE source message = ONE import message block.
+            # Media+caption: "{ts} - {name}: {file} (file attached)\n{caption}"
+            # (caption is a continuation line INSIDE the same block — verified
+            # against filippz/telegram_import and tdlib's parser). Text-only:
+            # "{ts} - {name}: {text}". Never split one source message into two
+            # timestamped lines.
             media_items = m.get("media") or []
-            has_media = False
+            media_fname = None
             for med in media_items:
                 fname = med.get("filename") or med.get("original_filename")
-                if not fname:
-                    continue
-                mtype = med.get("type") or "document"
-                f.write(f"{ts} - {name}: {_media_marker(fname, mtype)}\n")
-                media_refs += 1
-                has_media = True
+                if fname:
+                    media_fname = fname
+                    media_refs += 1
+                    break
 
-            # Message text (can be empty if only media)
-            if text or not has_media:
+            if media_fname:
+                line = f"{ts} - {name}: {_media_marker(media_fname, 'document')}"
+                if text:
+                    line += f"\n{_escape(text)}"
+                f.write(line + "\n")
+            elif text:
                 f.write(f"{ts} - {name}: {_escape(text)}\n")
-            elif not has_media and not text:
-                # skip completely empty lines
-                pass
+            else:
+                # completely empty message — skip (nothing to import)
+                continue
 
     stats = {
         "messages": len(messages),
