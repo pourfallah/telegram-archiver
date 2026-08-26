@@ -136,7 +136,7 @@ def _archive_record(row: dict[str, Any]) -> dict[str, Any]:
         "sender_id": (row.get("sender") or {}).get("id") if isinstance(row.get("sender"), dict) else None,
         "text": row.get("text") or "",
         "media_ctor": ctor,
-        "caption": (row.get("text") or "") if ctor else None,
+        "caption": (row.get("text") or "") if ctor not in (None, "none") else None,
         "reply_to": row.get("reply_to"),
         "grouped_id": row.get("grouped_id"),
         "forward": fwd,
