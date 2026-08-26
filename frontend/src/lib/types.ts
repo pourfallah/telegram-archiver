@@ -59,13 +59,20 @@ export interface PreviewMessage {
   date: string | null
   sender: string | null
   text: string | null
+  caption: string | null
   media: string[] | null
+  media_label: string | null
   reply_to: number | null
+  reactions: { reactions?: { emoji?: string; count?: number }[] } | null
+  forwarded_from: { from_id?: number | null; from_name?: string | null } | null
+  grouped_id: number | null
 }
 
 export interface ExportPreview {
   export_id: number
   status: string
+  verified: boolean
+  verification_status: string | null
   total_messages: number
   partial: boolean
   messages: PreviewMessage[]

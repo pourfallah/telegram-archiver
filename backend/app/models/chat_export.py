@@ -4,6 +4,7 @@ from datetime import datetime
 from sqlalchemy import (
     JSON,
     BigInteger,
+    Boolean,
     DateTime,
     Float,
     ForeignKey,
@@ -52,6 +53,11 @@ class ChatExport(Base):
     options: Mapped[dict] = mapped_column(JSON, default=dict)
     export_dir: Mapped[str | None] = mapped_column(String(1024))
     error: Mapped[str | None] = mapped_column(Text)
+
+    # Export self-check (SOURCE vs CANONICAL ARCHIVE). Import is disabled
+    # until verified is True and verification.status == "PASS".
+    verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    verification: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

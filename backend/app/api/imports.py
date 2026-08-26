@@ -154,6 +154,20 @@ async def start_test_import(
 
     export = await _get_owned_export(payload.export_id, db, user)
 
+    # HARD GATE: the source archive must be verified against the live source
+    # before ANY import. Never import from an unverified/lossy archive.
+    if not export.verified or (export.verification or {}).get("status") != "PASS":
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "export_not_verified",
+                "message": (
+                    "Source archive is incomplete or inconsistent. Import is "
+                    "disabled until the source archive is verified."
+                ),
+            },
+        )
+
     # Build canonical archive if not already present
     from pathlib import Path
     export_dir = Path(export.export_dir)
@@ -299,6 +313,20 @@ async def start_real_import(
         raise HTTPException(status_code=400, detail="Target account is not logged in")
 
     export = await _get_owned_export(payload.export_id, db, user)
+
+    # HARD GATE: the source archive must be verified against the live source
+    # before ANY import. Never import from an unverified/lossy archive.
+    if not export.verified or (export.verification or {}).get("status") != "PASS":
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "error": "export_not_verified",
+                "message": (
+                    "Source archive is incomplete or inconsistent. Import is "
+                    "disabled until the source archive is verified."
+                ),
+            },
+        )
 
     # Build canonical archive if not already present
     from pathlib import Path

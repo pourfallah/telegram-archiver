@@ -178,20 +178,53 @@ export default function Exports(): JSX.Element {
                 Export preview · first {preview.messages.length} of {preview.total_messages}
                 {preview.partial ? ' (partial)' : ''}
               </span>
-              <button onClick={() => setPreview(null)} className="text-slate-400 hover:text-white">✕</button>
+              <span className="flex items-center gap-2">
+                {preview.verification_status === 'PASS' ? (
+                  <span className="rounded bg-emerald-900/60 px-2 py-0.5 text-xs text-emerald-300">verified: PASS</span>
+                ) : (
+                  <span className="rounded bg-amber-900/60 px-2 py-0.5 text-xs text-amber-300">not verified</span>
+                )}
+                <button onClick={() => setPreview(null)} className="text-slate-400 hover:text-white">✕</button>
+              </span>
             </div>
             <div className="space-y-3 overflow-y-auto p-4 text-sm">
               {preview.messages.length === 0 && <p className="text-slate-400">No messages yet.</p>}
               {preview.messages.map((m) => (
                 <div key={m.id} className="rounded-md border border-slate-800 bg-slate-950 p-3">
                   <div className="flex justify-between text-xs text-slate-500">
-                    <span className="font-medium text-slate-300">{m.sender ?? 'Unknown'}</span>
+                    <span className="font-medium text-slate-300">
+                      {m.sender ?? 'Unknown'} <span className="text-slate-600">#{m.id}</span>
+                    </span>
                     <span>{m.date ?? ''}</span>
                   </div>
-                  {m.text ? (
+                  {m.media_label && (
+                    <div className="mt-1 text-xs font-medium text-sky-400">
+                      📎 media: {m.media?.join(', ')}
+                      {m.grouped_id != null && <span className="ml-1 text-slate-500">(group {m.grouped_id})</span>}
+                    </div>
+                  )}
+                  {m.caption ? (
+                    <p className="mt-1 whitespace-pre-wrap">
+                      {m.caption}
+                      <span className="ml-1 text-xs text-slate-500">[caption]</span>
+                    </p>
+                  ) : m.text ? (
                     <p className="mt-1 whitespace-pre-wrap">{m.text}</p>
-                  ) : (
-                    <p className="mt-1 text-slate-400">(media only: {Object.keys(m.media || {}).join(', ') || 'yes'})</p>
+                  ) : null}
+                  {m.reply_to != null && (
+                    <p className="mt-1 text-xs text-purple-400">↩ reply to message #{m.reply_to}</p>
+                  )}
+                  {m.forwarded_from && (
+                    <p className="mt-1 text-xs text-orange-400">
+                      ⏩ forwarded
+                      {m.forwarded_from.from_name ? ` from ${m.forwarded_from.from_name}` : ''}
+                      {m.forwarded_from.from_id ? ` (id ${m.forwarded_from.from_id})` : ''}
+                    </p>
+                  )}
+                  {m.reactions?.reactions && m.reactions.reactions.length > 0 && (
+                    <p className="mt-1 text-xs text-rose-400">
+                      {m.reactions.reactions.map((r) => `${r.emoji}×${r.count ?? 1}`).join(' ')}
+                    </p>
                   )}
                 </div>
               ))}

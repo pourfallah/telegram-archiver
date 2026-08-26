@@ -230,6 +230,26 @@ class ExportEngine:
             json_lines.close()
             await self._checkpoint(export, offset_id, processed, speed_tracker)
             await self._finalize(export, dirs, json_lines, chat_header)
+
+            # Export self-check: SOURCE (live MTProto) vs CANONICAL ARCHIVE.
+            # Import is gated on this passing, so it must run at export time.
+            try:
+                from app.services.export_verification import verify_export
+
+                summary = await verify_export(dirs, client, entity, export_id=export.id)
+                export.verified = summary["status"] == "PASS"
+                export.verification = summary
+                async with self._sf() as db:
+                    row = await db.get(ChatExport, export.id)
+                    if row is not None:
+                        row.verified = export.verified
+                        row.verification = summary
+                        await db.commit()
+                self._log.info("Export %s verification: %s (%s checks, %s failed)",
+                               export.id, summary["status"], summary["checked"],
+                               summary["failed_checks"])
+            except Exception:  # noqa: BLE001 — never fail an export over verification
+                self._log.exception("Export %s verification failed", export.id)
         except ExportPaused:
             json_lines.close()
             raise
@@ -518,7 +538,12 @@ class ExportEngine:
     def _make_dirs(self, account: TelegramSession, export: ChatExport) -> Path:
         root = self._settings.exports_dir / safe_filename(str(account.phone) or "account")
         chat_name = safe_filename(export.chat_title or f"chat_{export.chat_id}", f"chat_{export.chat_id}")
-        out = root / chat_name
+        # Each export gets its OWN run directory. Sharing one directory across
+        # exports made the append-only messages.jsonl accumulate stale rows from
+        # older runs (44-row archive for a 16-message chat), which corrupted
+        # both the canonical archive and verification.
+        out = root / chat_name / f"run_{export.id}"
+        out.mkdir(parents=True, exist_ok=True)
         export.export_dir = str(out)
         return out
 
