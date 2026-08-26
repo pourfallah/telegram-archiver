@@ -107,18 +107,20 @@ MEDIA_TYPE_TO_CTOR = {
 
 def _archive_record(row: dict[str, Any]) -> dict[str, Any]:
     media = row.get("media") or []
-    ctor = None
+    ctor = "none"
     if isinstance(media, list) and media:
         first = media[0]
         if isinstance(first, dict):
             # full canonical rows carry ctor; ledger-derived rows carry only
             # a semantic type, which maps 1:1 to the expected constructor.
-            ctor = first.get("ctor") or MEDIA_TYPE_TO_CTOR.get(first.get("type"))
+            ctor = first.get("ctor") or MEDIA_TYPE_TO_CTOR.get(first.get("type")) or "none"
     elif isinstance(media, dict):
         ctor = media.get("ctor")
         if not ctor:
             types = [k for k in media.keys() if media[k]]
-            ctor = MEDIA_TYPE_TO_CTOR.get(types[0]) if types else None
+            ctor = MEDIA_TYPE_TO_CTOR.get(types[0], "none") if types else "none"
+    if not ctor:
+        ctor = "none"
     fwd = row.get("forwarded_from") or row.get("forward") or None
     if isinstance(fwd, dict):
         fwd = {
