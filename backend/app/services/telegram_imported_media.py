@@ -85,7 +85,7 @@ class TelegramImportedMediaService:
         """
         self.client = client
     
-    def build_input_media(self, spec: MediaUploadSpec) -> types.TypeInputMedia:
+    async def build_input_media(self, spec: MediaUploadSpec) -> types.TypeInputMedia:
         """
         Build the correct InputMedia constructor for uploadImportedMedia.
         
@@ -100,7 +100,7 @@ class TelegramImportedMediaService:
             InputMediaUploadedPhoto or InputMediaUploadedDocument with attributes
         """
         # Upload file to get InputFile handle
-        handle = self._upload_file(spec)
+        handle = await self._upload_file(spec)
         
         if spec.media_type == "photo" or (spec.mime_type.startswith("image/") and spec.mime_type != "image/webp"):
             # Photo: use InputMediaUploadedPhoto (successful in caption_final_test.py)
@@ -119,9 +119,16 @@ class TelegramImportedMediaService:
             attributes=attributes,
         )
     
-    def _upload_file(self, spec: MediaUploadSpec) -> types.TypeInputFile:
-        """Upload file to Telegram and return InputFile handle."""
-        return self.client.upload_file(spec.file_path, file_name=spec.filename)
+    async def _upload_file(self, spec: MediaUploadSpec) -> types.TypeInputFile:
+        """Upload file to Telegram and return InputFile handle.
+
+        NOTE: client.upload_file is a COROUTINE and MUST be awaited. The prior
+        sync `def` returned the unawaited coroutine, which telethon rejected at
+        uploadImportedMedia time with "a TLObject was expected but found
+        something else". This was a real regression the live E2E exposed.
+        """
+        handle = await self.client.upload_file(spec.file_path, file_name=spec.filename)
+        return handle
     
     def _build_document_attributes(self, spec: MediaUploadSpec) -> list:
         """Build document attributes based on media type and extra metadata.
@@ -204,7 +211,7 @@ class TelegramImportedMediaService:
         """
         try:
             # Build InputMedia with correct constructor and attributes
-            input_media = self.build_input_media(spec)
+            input_media = await self.build_input_media(spec)
             input_ctor = type(input_media).__name__
             
             # Call uploadImportedMedia
