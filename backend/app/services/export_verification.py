@@ -35,7 +35,25 @@ FIELD_CHECKS = [
 
 
 def _media_ctor(message) -> str:
-    return type(message.media).__name__ if getattr(message, "media", None) else "none"
+    """The media constructor, normalized for archive comparison.
+
+    `MessageMediaWebPage` is a derived, ephemeral link preview (not user
+    content) that the export intentionally does not archive (classify_media
+    drops it, so the archive records the message as text-only with media=none).
+    Treat it as `none` here so the live side matches the archive instead of
+    producing a false export-verification FAIL that blocks import.
+    """
+    m = getattr(message, "media", None)
+    if m is None:
+        return "none"
+    if type(m).__name__ == "MessageMediaWebPage":
+        return "none"
+    return type(m).__name__
+
+
+def _has_media(message) -> bool:
+    """Whether the message carries REAL user media (not a link preview)."""
+    return _media_ctor(message) != "none"
 
 
 def _iso(dt) -> str | None:
@@ -75,7 +93,7 @@ def _source_record(message) -> dict[str, Any]:
             d["document_id"] = e.document_id
         entities.append(d)
     text = getattr(message, "message", "") or ""
-    has_media = getattr(message, "media", None) is not None
+    has_media = _has_media(message)
     return {
         "id": getattr(message, "id", 0),
         "date": _iso(getattr(message, "date", None)),
@@ -176,6 +194,39 @@ def _forward_eq(a, b) -> bool:
             and a.get("post_author") == b.get("post_author"))
 
 
+def _entities_eq(a, b) -> bool:
+    """Compare entity lists across the two serialization vocabularies.
+
+    Live `_source_record` serializes entities with the Telethon **ctor** name
+    (e.g. {"ctor":"MessageEntityUrl", ...}); the canonical archive (via
+    telegram_utils.serialize_entities) serializes with the semantic **type**
+    (e.g. {"type":"url", ...}). Normalise both to (type, offset, length,
+    url/language/user_id/document_id) before comparing so a field-vocabulary
+    difference is not misread as a fidelity failure.
+    """
+    from app.services.telegram_utils import ENTITY_TYPE_MAP
+
+    def norm(ents):
+        out = []
+        for e in ents or []:
+            if not isinstance(e, dict):
+                continue
+            kind = e.get("type") or e.get("ctor") or e.get("cls") or "unknown"
+            kind = ENTITY_TYPE_MAP.get(kind, kind)
+            out.append((
+                kind,
+                e.get("offset"),
+                e.get("length"),
+                e.get("url"),
+                e.get("language"),
+                e.get("user_id"),
+                e.get("document_id"),
+            ))
+        return sorted(out)
+
+    return norm(a) == norm(b)
+
+
 def compare_records(source: dict, archive: dict) -> dict[str, Any]:
     """Per-field comparison; returns dict of field -> ok/mismatch detail."""
     checks: dict[str, Any] = {}
@@ -192,7 +243,7 @@ def compare_records(source: dict, archive: dict) -> dict[str, Any]:
         elif field == "reply_to":
             ok = (s or {}).get("reply_to_msg_id") == (a or {}).get("reply_to_msg_id")
         elif field == "entities":
-            ok = (s or []) == (a or [])
+            ok = _entities_eq(s, a)
         else:
             ok = s == a
         checks[field] = {"ok": ok, "source": s, "archive": a}
