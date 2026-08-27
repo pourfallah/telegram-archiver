@@ -99,9 +99,14 @@ FULL production path end-to-end.
 
 ### PHASE 2 — Root cause fix (ONE canonical code path)
 - [x] Live source inspection PROVED the prior "media loss" was a text-only source fixture (not a classify_media bug).
-- [ ] Decide canonical implementation: keep `telegram_imported_media.py` + serializer fixes, or revert to proven path.
+- [x] Decide canonical implementation: KEEP `telegram_imported_media.py` (canonical media service
+      + write_trace → MEDIA_IMPORT_TRACE.json) + serializer/fixes; single code path.
+- [x] FIX import_tasks.py D-2 `NameError`: `limit = len(src_map)` referenced undefined `src_map`;
+      now `limit = job.message_limit`, normalized to `stats["messages"]` int after build_import_file.
+- [x] FIX dead `MediaImportTrace` in worker: now actually writes MEDIA_IMPORT_TRACE.json via
+      `service.write_trace` (single canonical writer).
 - [ ] Ensure production worker uses the SAME serializer + media service + session resolver as the
-      verified path (no test-only shortcuts). Confirmed stuck point: running worker is stale.
+      verified path (rebuild+deploy the new image; running worker is stale).
 - [ ] Rebuild & redeploy backend+worker images with the canonical code.
 - [ ] Run existing test suite to verify nothing regressed.
 

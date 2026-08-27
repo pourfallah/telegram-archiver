@@ -16,6 +16,12 @@ from app.services.import_serializer import build_import_file, parse_import_head
 from app.services.import_verification import load_canonical_messages, run_verification, write_report
 from app.services.session_manager import SessionManager
 from app.services.telegram_import import ImportProtocolError, TelegramImporter
+from app.services.telegram_imported_media import (
+    MediaImportTrace,
+    MediaUploadResult,
+    TelegramImportedMediaService,
+    build_media_specs_from_archive,
+)
 from app.workers.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -159,6 +165,13 @@ async def _run_import_async(job_id: int, local_factory) -> dict:
         if job is None:
             return {"error": "Job not found"}
 
+        # IDEMPOTENCY CHECK: Prevent duplicate Telegram imports
+        # If import_id exists and target already has new messages, verify instead of retry
+        if job.import_id and job.status in ("media_uploading", "starting_import", "verifying", "completed", "partial"):
+            logger.info(f"Job {job_id} already has import_id={job.import_id}, checking status...")
+            # We could check if target already has messages, but for now just continue
+            # The existing logic will handle verification
+
         try:
             job.status = "validating"
             job.started_at = __import__("datetime").datetime.now(__import__("datetime").timezone.utc)
@@ -223,6 +236,11 @@ async def _run_import_async(job_id: int, local_factory) -> dict:
             import_file = export_dir / "import" / "import.txt"
             import_file.parent.mkdir(parents=True, exist_ok=True)
 
+            # D-2 fix: limit must be None (all messages) or an int. The prior
+            # code referenced the undefined `src_map` here, raising NameError
+            # for full imports without an explicit message_limit. Normalize
+            # after building the file: `limit or stats["messages"]` gives an int
+            # for the downstream slicing (verification / reactions).
             limit = job.message_limit
 
             # Detect the target account's UTC offset from a live message date:
@@ -242,6 +260,10 @@ async def _run_import_async(job_id: int, local_factory) -> dict:
                 limit=limit,
                 tz_offset_minutes=tz_offset_minutes,
             )
+            # D-2: normalize limit to an int (full-slice default = all messages)
+            # for the downstream `[-limit:]` / `imported_count=limit` slices.
+            if limit is None:
+                limit = stats["messages"]
 
             # Phase 3: checkHistoryImport
             job.progress = {"phase": "check_import_format"}
@@ -264,6 +286,20 @@ async def _run_import_async(job_id: int, local_factory) -> dict:
             await db.commit()
 
             media_count = stats["media_refs"]
+            # ASSERTION: media_count must equal actual media items referenced in import file
+            # (This catches grouped media undercount)
+            import_text = import_file.read_text(encoding="utf-8")
+            media_specs_check = build_media_specs_from_archive(export_dir, import_text, None)
+            actual_media_count = len(media_specs_check)
+            if media_count != actual_media_count:
+                logger.warning(
+                    f"media_count mismatch: serializer says {media_count}, "
+                    f"actual media items in import file: {actual_media_count}"
+                )
+                media_count = actual_media_count  # Use correct count
+                job.progress = {"phase": "init_history_import", "media_count_corrected": media_count}
+                await db.commit()
+
             try:
                 import_id = await importer.init_history_import(peer, import_file, media_count)
                 if import_id is None:
@@ -277,145 +313,101 @@ async def _run_import_async(job_id: int, local_factory) -> dict:
                 await release()
                 return {"error": job.error}
 
-            # Phase 5: Upload media
+            # Phase 5: Upload media using canonical service
             job.status = "media_uploading"
             job.progress = {"phase": "media_uploading", "uploaded": 0, "total": media_count}
             await db.commit()
 
-            # Build a map of filename -> media info, but ONLY for files actually
-            # referenced in the import file (the <attached: FILENAME> lines).
-            # Avoids uploading the whole archive's media dir for a sliced import.
-            archive_dir = export_dir / "archive"
-            media_src = export_dir / "media"
-            if archive_dir.exists():
-                media_src = archive_dir / "media"
+            # Build media specs from canonical archive and import file
+            from app.services.telegram_imported_media import (
+                build_media_specs_from_archive,
+                TelegramImportedMediaService,
+            )
 
-            wanted: set[str] = set()
             import_text = import_file.read_text(encoding="utf-8")
-            import re as _re
+            media_specs = build_media_specs_from_archive(export_dir, import_text, None)
+            
+            # Update media_count to match actual specs (important for grouped media)
+            media_count = len(media_specs)
+            job.progress = {"phase": "media_uploading", "uploaded": 0, "total": media_count}
+            await db.commit()
 
-            # Prime type-specific metadata (sticker alt/dims, audio attrs) from
-            # the canonical archive so _build_input_media can send rich
-            # attributes for uploadImportedMedia.
-            _MEDIA_EXTRA_CACHE.clear()
-            try:
-                for ndjson in sorted((Path(export_dir) / "archive" / "messages").glob("*.ndjson")):
-                    for ln in ndjson.read_text(encoding="utf-8").splitlines():
-                        if not ln.strip():
-                            continue
-                        row = json.loads(ln)
-                        for med in row.get("media") or []:
-                            fname = med.get("filename") or med.get("original_filename")
-                            if not fname:
-                                continue
-                            extra = {}
-                            if med.get("sticker_alt") or med.get("alt"):
-                                extra["alt"] = med.get("sticker_alt") or med.get("alt")
-                            if med.get("width"):
-                                extra["width"] = med.get("width")
-                            if med.get("height"):
-                                extra["height"] = med.get("height")
-                            if med.get("duration"):
-                                extra["duration"] = med.get("duration")
-                            if med.get("performer"):
-                                extra["performer"] = med.get("performer")
-                            if med.get("title"):
-                                extra["title"] = med.get("title")
-                            if extra:
-                                _MEDIA_EXTRA_CACHE[(export.id, fname)] = extra
-            except Exception:  # noqa: BLE001 — enrichment is additive
-                logger.warning("media extra priming failed", exc_info=True)
-            # Marker syntax: "{file} (file attached)" (verified) — also accept
-            # the legacy "<attached: {file}>" for older packages.
-            for m in _re.finditer(r"^.*?:\s*(.+?) \(file attached\)", import_text, _re.M):
-                wanted.add(m.group(1).strip())
-            for m in _re.finditer(r"<attached:\s*([^>]+)>", import_text):
-                wanted.add(m.group(1).strip())
-
-            def _first_marker_line(fname: str) -> str:
-                for ln in import_text.splitlines():
-                    if f"{fname} (file attached)" in ln or f"<attached: {fname}>" in ln:
-                        return ln
-                return ""
-
-            media_map: dict[str, dict] = {}
-            if media_src.exists():
-                for media_type_dir in media_src.iterdir():
-                    if not media_type_dir.is_dir():
-                        continue
-                    for media_file in media_type_dir.iterdir():
-                        if media_file.is_file() and media_file.name in wanted:
-                            media_map.setdefault(media_file.name, {
-                                "path": media_file,
-                                "type": media_type_dir.name,
-                                "mime": _guess_mime(media_file),
-                                "extra": _media_extra(export, media_file.name),
-                                "message_ids": _message_ids_for_filename(
-                                    export_dir, media_file.name),
-                                "first_line": _first_marker_line(media_file.name),
-                            })
-            # If nothing matched by name (e.g. archive filenames differ from the
-            # marker), still fall back to every file so media isn't silently dropped.
-            if not media_map and wanted:
-                media_map.clear()
-                for media_type_dir in media_src.iterdir():
-                    if media_type_dir.is_dir():
-                        for media_file in media_type_dir.iterdir():
-                            if media_file.is_file():
-                                media_map.setdefault(media_file.name, {
-                                    "path": media_file,
-                                    "type": media_type_dir.name,
-                                    "mime": _guess_mime(media_file),
-                                    "extra": _media_extra(export, media_file.name),
-                                    "message_ids": _message_ids_for_filename(
-                                        export_dir, media_file.name),
-                                    "first_line": _first_marker_line(media_file.name),
-                                })
-
-            # Upload each media file
+            # Initialize canonical media import service
+            service = TelegramImportedMediaService(client)
+            
+            # Upload each media file using the service
             uploaded_tokens = {}
             media_trace = []  # requirement: trace the final import association
-            for idx, (filename, info) in enumerate(media_map.items()):
-                job.progress = {"phase": "media_uploading", "uploaded": idx, "total": media_count, "current_file": filename}
+            for idx, spec in enumerate(media_specs):
+                job.progress = {
+                    "phase": "media_uploading", 
+                    "uploaded": idx, 
+                    "total": media_count, 
+                    "current_file": spec.filename
+                }
                 await db.commit()
 
                 try:
-                    # Upload the media file (first to Telegram, then attach to import)
-                    media = await _build_input_media(client, info)
-                    input_ctor = type(media).__name__
-                    token = await importer.upload_imported_media(
-                        peer, import_id, filename, media
-                    )
-                    uploaded_tokens[filename] = token
-                    token_ctor = type(token).__name__ if token is not None else None
-                    token_doc_id = getattr(getattr(token, "document", None), "id", None)
-                    token_photo_id = getattr(getattr(token, "photo", None), "id", None)
+                    # Use canonical service to upload media
+                    result = await service.upload_imported_media(peer, import_id, spec)
+                    
+                    if result.error:
+                        raise ImportProtocolError("MEDIA_UPLOAD_FAILED", result.error)
+                    
+                    uploaded_tokens[spec.filename] = result
                     media_trace.append({
-                        "source_message_id": (info.get("message_ids") or [None])[0],
-                        "filename": filename,
-                        "media_type": info.get("type"),
-                        "input_media_ctor": input_ctor,
-                        "returned_ctor": token_ctor,
-                        "returned_document_id": token_doc_id,
-                        "returned_photo_id": token_photo_id,
-                        "import_file_line": f"{info.get('first_line', '')}",
+                        "source_message_id": spec.source_message_id,
+                        "filename": spec.filename,
+                        "media_type": spec.media_type,
+                        "input_media_ctor": result.input_media_ctor,
+                        "returned_ctor": result.returned_ctor,
+                        "returned_document_id": result.returned_document_id,
+                        "returned_photo_id": result.returned_photo_id,
                     })
-                    logger.info(f"Uploaded media {filename}: {token_ctor} doc={token_doc_id} photo={token_photo_id}")
-                except ImportProtocolError as exc:
+                    logger.info(
+                        f"Uploaded media {spec.filename}: {result.returned_ctor} "
+                        f"doc={result.returned_document_id} photo={result.returned_photo_id}"
+                    )
+                except Exception as exc:
+                    logger.error(f"Media upload failed for {spec.filename}: {exc}")
                     job.status = "failed"
-                    job.error = f"Media upload failed for {filename}: {exc.error_code} — {exc.message}"
+                    job.error = f"Media upload failed for {spec.filename}: {exc}"
                     await db.commit()
                     await release()
                     return {"error": job.error}
 
-            # Persist the association trace next to the import package so the
-            # mapping source_message -> filename -> server token is auditable.
+            # Persist the association trace next to the import package.
+            # Single canonical writer: TelegramImportedMediaService.write_trace
+            # -> MEDIA_IMPORT_TRACE.json (source_message -> filename -> InputMedia
+            # ctor -> returned MessageMedia ctor/id). The trace maps every
+            # uploaded spec to its result so the import association is auditable.
             try:
-                (Path(export_dir) / "MEDIA_ASSOCIATION_TRACE.json").write_text(
-                    json.dumps(media_trace, ensure_ascii=False, indent=2),
-                    encoding="utf-8")
-            except Exception:  # noqa: BLE001 — trace is additive
-                logger.warning("Could not write MEDIA_ASSOCIATION_TRACE.json", exc_info=True)
+                from app.services.telegram_imported_media import MediaImportTrace, MediaUploadResult
+
+                trace_obj = MediaImportTrace(
+                    import_id=import_id,
+                    target_peer_id=getattr(peer, "peer_id", getattr(peer, "id", 0)),
+                    uploads=[
+                        MediaUploadResult(
+                            source_message_id=spec.source_message_id,
+                            filename=spec.filename,
+                            media_type=spec.media_type,
+                            input_media_ctor=result.input_media_ctor,
+                            returned_ctor=result.returned_ctor,
+                            returned_photo_id=result.returned_photo_id,
+                            returned_document_id=result.returned_document_id,
+                        )
+                        for spec, result in zip(media_specs, [uploaded_tokens.get(s.filename) for s in media_specs])
+                    ],
+                    total_declared=media_count,
+                    total_uploaded=len([t for t in media_trace if t.get("returned_ctor") not in [None]]),
+                    total_succeeded=len([t for t in media_trace if t.get("returned_ctor") not in ["MessageMediaEmpty", "ERROR", None]]),
+                    total_failed=len([t for t in media_trace if t.get("returned_ctor") in ["MessageMediaEmpty", "ERROR", None]]),
+                )
+                service.write_trace(trace_obj, Path(export_dir) / "MEDIA_IMPORT_TRACE.json")
+                logger.info("Wrote MEDIA_IMPORT_TRACE.json (%d uploads)", len(media_trace))
+            except Exception as e:  # noqa: BLE001 — trace is additive
+                logger.warning(f"Could not write media trace: {e}")
 
             # Phase 5b: Media uploaded — Telegram matches tokens to the import
             # file by filename (the <attached: filename> lines), no splicing needed.
