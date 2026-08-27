@@ -318,12 +318,12 @@ async def _run_import_async(job_id: int, local_factory) -> dict:
             job.progress = {"phase": "media_uploading", "uploaded": 0, "total": media_count}
             await db.commit()
 
-            # Build media specs from canonical archive and import file
-            from app.services.telegram_imported_media import (
-                build_media_specs_from_archive,
-                TelegramImportedMediaService,
-            )
-
+            # Build media specs from canonical archive and import file.
+            # NOTE: build_media_specs_from_archive / TelegramImportedMediaService
+            # are ALREADY imported at module top — a local re-import here makes
+            # the name function-local and breaks any earlier reference in the
+            # same function (the media_count assertion above) with
+            # UnboundLocalError. Do not re-import locally.
             import_text = import_file.read_text(encoding="utf-8")
             media_specs = build_media_specs_from_archive(export_dir, import_text, None)
             
