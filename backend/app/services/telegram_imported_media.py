@@ -166,10 +166,15 @@ class TelegramImportedMediaService:
             attributes.append(types.DocumentAttributeAnimated())
         
         elif spec.media_type == "video":
+            # DocumentAttributeVideo requires INT values for duration/w/h at the
+            # wire level — `or None` makes struct.pack fail with
+            # "required argument is not an integer" on send (real E2E job 48).
+            # Coerce missing values to 0 (client accepts None but the RPC codec
+            # does not).
             attributes.append(types.DocumentAttributeVideo(
-                duration=int(float(extra.get("duration", 0) or 0)),
-                w=int(extra.get("width", 0)) or None,
-                h=int(extra.get("height", 0)) or None,
+                duration=int(float(extra.get("duration", 0) or 0) or 0),
+                w=int(extra.get("width", 0) or 0),
+                h=int(extra.get("height", 0) or 0),
             ))
         
         elif spec.media_type == "audio":
