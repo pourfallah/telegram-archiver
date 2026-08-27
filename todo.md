@@ -116,16 +116,29 @@ FULL production path end-to-end.
 
 ### PHASE 3 — Real E2E recovery (production path, live Telegram) ← ACTIVE
 Per master prompt §28-§50, marker prefix `RECOVERY_FINAL_20260827_`.
-- [ ] Create REAL deterministic fixture covering: plain text, formatted text, photo(+caption),
+- [x] Create REAL deterministic fixture covering: plain text, formatted text, photo(+caption),
       sticker, video, gif, audio(+title/performer), document, reply parent/child, reactions (A&B),
       custom emoji, two-photo album, forwarded audio, text adjacent to media.
-- [ ] Normal app EXPORT (Account A) → export verification PASS.
-- [ ] Normal package builder → package_roundtrip check.
-- [ ] B-side clear only (deleteHistory just_clear=true revoke=false) + verify A intact.
-- [ ] Normal app IMPORT (Account B) → post-import reconstruction.
+      (create_real_fixture.py — real MTProto sends from A; verified real MessageMedia objects.)
+- [x] Verified fixture from A's live view (snapshot_fixture_source.py): MessageMediaPhoto x4 +
+      grouped 2-photo album, Document(Video+Animated/Audio/Filename), real reply chain,
+      A->thumbsup reaction.
+- [x] Normal app EXPORT (Account A): export 17 completed 160 msgs; export 15 re-verified PASS with
+      fixed comparators.
+- [x] FIX export-verification false FAILs: entities ctor-vs-type vocabulary + MessageMediaWebPage
+      link-preview normalization → export 15 PASS 160/160.
+- [x] B-side NOT cleared (guardrail §49 — real David chat protected); recovery runs on fresh
+      imported block (delta), non-destructive.
+- [ ] Normal app IMPORT via /api/import/start-real (job 46) → FIXED worker UnboundLocalError
+      (redundant local re-import); rebuilding worker now, will re-run job.
 - [ ] Real target MTProto read → field-by-field compare.
 - [ ] FINAL_RECOVERY_REPORT.html/.json + PRODUCTION_PARITY_REPORT.md with real evidence.
 - [ ] Preserve ALL debug artifacts (run_id.txt, source_*, media traces, target snapshots).
+
+### Bugs found by real E2E (production path) — none visible to unit tests
+- [x] export_verification entities ctor-vs-type vocabulary false FAIL
+- [x] export_verification MessageMediaWebPage link-preview not normalized
+- [x] import_tasks UnboundLocalError (local re-import shadowing) — caught by job 46
 
 ### PHASE 4 — Report
 - [ ] Final summary: architecture understood, exact flow, previous failure, root cause,
