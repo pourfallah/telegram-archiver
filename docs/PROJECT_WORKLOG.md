@@ -157,6 +157,12 @@ Per master prompt §28-§50, marker prefix `RECOVERY_FINAL_20260827_`.
       files changed, canonical path, real E2E result, fidelity classification, remaining limits.
       (See PRODUCTION_PARITY_REPORT.md + final_recovery_report + this worklog.)
 - [x] Post-fix focused suite green (EXIT=0).
+- [x] Fixed flaky test_upload_media_attributes: _run() helper used deprecated
+      asyncio.get_event_loop().run_until_complete() → order-dependent
+      "coroutine never awaited" after pytest-asyncio async tests (present since 6db7074,
+      not caused by this session). Switched to asyncio.run(); verified passes alone + after
+      async tests (10/10). The 3 test_export_engine.py failures are pre-existing,
+      infra-dependent (filesystem/hermeticity) and unrelated to the import pipeline.
 
 ---
 

@@ -120,8 +120,17 @@ def test_upload_media_attributes():
 
 
 def _run(coro):
+    """Await a coroutine in a fresh event loop.
+
+    Was asyncio.get_event_loop().run_until_complete(coro) — in Python 3.12 that
+    API returns no current loop (DeprecationWarning) and raises at GC time after
+    pytest-asyncio async tests ("coroutine '_build_input_media' was never
+    awaited") when there is no running loop in the current thread. asyncio.run
+    creates a fresh loop each call and is order-independent.
+    """
     import asyncio
-    return asyncio.get_event_loop().run_until_complete(coro)
+
+    return asyncio.run(coro)
 
 
 def test_mapping_never_positional_for_media():
