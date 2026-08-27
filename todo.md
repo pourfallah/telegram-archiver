@@ -105,10 +105,14 @@ FULL production path end-to-end.
       now `limit = job.message_limit`, normalized to `stats["messages"]` int after build_import_file.
 - [x] FIX dead `MediaImportTrace` in worker: now actually writes MEDIA_IMPORT_TRACE.json via
       `service.write_trace` (single canonical writer).
-- [ ] Ensure production worker uses the SAME serializer + media service + session resolver as the
+- [x] Ensure production worker uses the SAME serializer + media service + session resolver as the
       verified path (rebuild+deploy the new image; running worker is stale).
-- [ ] Rebuild & redeploy backend+worker images with the canonical code.
-- [ ] Run existing test suite to verify nothing regressed.
+- [x] Rebuild & redeploy backend+worker images with the canonical code.
+      (docker compose build backend worker; compose up -d backend worker; verified: backend /health 200,
+      worker imports app.services.telegram_imported_media OK.)
+- [ ] Run existing test suite to verify nothing regressed. (import_pipeline + export_verification already
+      9/9 green; full suite has infra-dependent slow tests (test_exports_api timeout, export_engine failures)
+      — will re-check.)
 
 ### PHASE 3 — Real E2E recovery (production path, live Telegram) ← ACTIVE
 Per master prompt §28-§50, marker prefix `RECOVERY_FINAL_20260827_`.
