@@ -75,18 +75,17 @@ def _escape(text: str) -> str:
 
 
 def _media_marker(filename: str, media_type: str) -> str:
-    """Media reference token for the WhatsApp-style import format.
+    """Media reference token — MUST match the timestamp format family.
 
-    VERIFIED SYNTAX (independent implementation filippz/telegram_import +
-    tdlib MessageImportManager.cpp):
-      "{ts} - {sender}: {filename} (file attached)"          -> MEDIA ONLY
-      "{ts} - {sender}: {filename} (file attached)\\n{caption}" -> MEDIA + CAPTION
-                                                               as ONE message
-    The caption belongs INSIDE the same message block: the first physical line
-    carries the timestamp/sender/media marker, continuation lines (no new
-    timestamp prefix) are the caption of THAT media message.
+    EXPERIMENTALLY VERIFIED (live matrix test 2026-08-26):
+      "[DD/MM/YYYY, HH:MM:SS] - Name: <attached: FILE>" -> media attaches
+      "[DD/MM/YYYY, HH:MM:SS] - Name: FILE (file attached)" -> NO attach
+    The '(file attached)' marker belongs to the DD/MM/YY ' - ' family
+    (filippz/telegram_import); '<attached: FILE>' belongs to our bracket
+    family. Mixing them makes uploadImportedMedia return MessageMediaEmpty.
+    Caption still goes INSIDE the same message block as a continuation line.
     """
-    return f"{filename} (file attached)"
+    return f"<attached: {filename}>"
 
 
 def build_import_file(

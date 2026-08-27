@@ -83,13 +83,13 @@ def test_media_line_shares_message_timestamp_and_sender(archive, tmp_path):
     out = tmp_path / "import.txt"
     build_import_file(archive, out)
     lines = _lines(out)
-    # media-only message: "{ts} - {sender}: {file} (file attached)" — ONE line
-    video_lines = [ln for ln in lines if "v.mp4 (file attached)" in ln]
+    # media-only message: "{ts} - {sender}: <attached: {file}>" — ONE line
+    video_lines = [ln for ln in lines if "<attached: v.mp4>" in ln]
     assert len(video_lines) == 1
     assert video_lines[0].startswith("[01/01/2020, 10:01:00]") and "Bob:" in video_lines[0]
     # caption stays attached INSIDE the same message block: the physical line
     # after the media line is the caption (no new timestamp prefix).
-    photo_idx = next(i for i, ln in enumerate(lines) if "p.jpg (file attached)" in ln)
+    photo_idx = next(i for i, ln in enumerate(lines) if "<attached: p.jpg>" in ln)
     assert lines[photo_idx + 1] == "photo caption"  # continuation line, no ts
     assert "photo caption" not in lines[photo_idx]  # media marker line has no caption text
 

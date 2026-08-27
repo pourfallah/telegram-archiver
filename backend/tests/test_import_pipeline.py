@@ -52,7 +52,7 @@ def test_import_photo(tmp_path):
     stats = build_import_file(d, out)
     assert stats["media_refs"] == 1
     content = out.read_text(encoding="utf-8")
-    assert content == "[01/01/2024, 10:00:00] - A: photo_test.jpg (file attached)\n"
+    assert content == "[01/01/2024, 10:00:00] - A: <attached: photo_test.jpg>\n"
 
 
 def test_import_photo_caption_one_block(tmp_path):
@@ -62,12 +62,10 @@ def test_import_photo_caption_one_block(tmp_path):
         _msg(1, "2024-06-01T12:30:00+00:00", 1, "A", "CAPTION_TEST_123", [
             {"type": "photo", "filename": "cap.jpg"}]),
     ])
-    out = tmp_path / "import.txt"
-    lines = (tmp_path and (out := tmp_path / "import.txt")) and None
     build_import_file(d, tmp_path / "import.txt")
     raw = (tmp_path / "import.txt").read_text(encoding="utf-8").splitlines()
     assert len(raw) == 2, f"media+caption must be ONE block (2 physical lines), got {raw}"
-    assert raw[0] == "[01/06/2024, 12:30:00] - A: cap.jpg (file attached)"
+    assert raw[0] == "[01/06/2024, 12:30:00] - A: <attached: cap.jpg>"
     assert raw[1] == "CAPTION_TEST_123"
 
 
@@ -81,7 +79,7 @@ def test_import_sticker_no_caption(tmp_path):
     out = tmp_path / "import.txt"
     build_import_file(d, out)
     content = (tmp_path / "import.txt").read_text(encoding="utf-8")
-    assert "sticker.webp (file attached)" in content
+    assert "<attached: sticker.webp>" in content
 
 
 def test_upload_media_attributes():
