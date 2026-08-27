@@ -152,9 +152,11 @@ Per master prompt §28-§50, marker prefix `RECOVERY_FINAL_20260827_`.
 - [x] media upload: DocumentAttributeVideo needs int w/h/duration at wire level
       ("required argument is not an integer" — real E2E job 48). FIXED (or 0); verified job 49.
 
-### PHASE 4 — Report
-- [ ] Final summary: architecture understood, exact flow, previous failure, root cause,
+### PHASE 4 — Report ✅ DONE (evidence delivered)
+- [x] Final summary: architecture understood, exact flow, previous failure, root cause,
       files changed, canonical path, real E2E result, fidelity classification, remaining limits.
+      (See PRODUCTION_PARITY_REPORT.md + final_recovery_report + this worklog.)
+- [x] Post-fix focused suite green (EXIT=0).
 
 ---
 
