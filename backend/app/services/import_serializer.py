@@ -164,19 +164,20 @@ def build_import_file(
             dates.append(ts)
 
             # ONE source message = ONE import message block.
-            # Media+caption: "{ts} - {name}: {file} (file attached)\n{caption}"
+            # Media+caption: "{ts} - {name}: <attached: FILE>\n{caption}"
             # (caption is a continuation line INSIDE the same block — verified
             # against filippz/telegram_import and tdlib's parser). Text-only:
             # "{ts} - {name}: {text}". Never split one source message into two
             # timestamped lines.
             media_items = m.get("media") or []
+            # Count ALL media items for this message (album = multiple)
             media_fname = None
             for med in media_items:
                 fname = med.get("filename") or med.get("original_filename")
                 if fname:
-                    media_fname = fname
-                    media_refs += 1
-                    break
+                    if media_fname is None:
+                        media_fname = fname  # First filename for import line
+                    media_refs += 1  # Count each media item for media_count
 
             if media_fname:
                 line = f"{ts} - {name}: {_media_marker(media_fname, 'document')}"
