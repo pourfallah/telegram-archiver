@@ -1,0 +1,301 @@
+[
+  {
+    "id": 5676154,
+    "date": "2026-08-27T18:00:38+00:00",
+    "text": "RECOVERY_FINAL_20260827_TEXT_001_PLAIN",
+    "sender_id": 165649921,
+    "media": null,
+    "grouped_id": null,
+    "reply": null,
+    "reactions": []
+  },
+  {
+    "id": 5676155,
+    "date": "2026-08-27T18:00:38+00:00",
+    "text": "RECOVERY_FINAL_20260827_FORMATTED_002 bold italic underline strike https://examp",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaWebPage"
+    },
+    "grouped_id": null,
+    "reply": null,
+    "reactions": []
+  },
+  {
+    "id": 5676156,
+    "date": "2026-08-27T18:00:38+00:00",
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaPhoto",
+      "photo_id": 5801195821607883011,
+      "sizes": [
+        "PhotoStrippedSize",
+        "PhotoSize",
+        "PhotoSize",
+        "PhotoSizeProgressive"
+      ]
+    },
+    "grouped_id": null,
+    "reply": null,
+    "reactions": []
+  },
+  {
+    "id": 5676157,
+    "date": "2026-08-27T18:00:39+00:00",
+    "text": "RECOVERY_FINAL_20260827_PHOTO_CAPTION_004 😍",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaPhoto",
+      "photo_id": 5801195821607883011,
+      "sizes": [
+        "PhotoStrippedSize",
+        "PhotoSize",
+        "PhotoSize",
+        "PhotoSizeProgressive"
+      ]
+    },
+    "grouped_id": null,
+    "reply": null,
+    "reactions": []
+  },
+  {
+    "id": 5676158,
+    "date": "2026-08-27T18:00:39+00:00",
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 5801195821147890643,
+      "mime": "video/webm",
+      "size": 136095,
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "sticker_136095.webm"
+    },
+    "grouped_id": null,
+    "reply": null,
+    "reactions": []
+  },
+  {
+    "id": 5676159,
+    "date": "2026-08-27T18:00:47+00:00",
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 5801195821147890644,
+      "mime": "video/mp4",
+      "size": 1029540,
+      "attrs": [
+        "DocumentAttributeVideo",
+        "DocumentAttributeFilename"
+      ],
+      "duration": 8.545,
+      "w": 720,
+      "h": 1280,
+      "file_name": "video_1029540.mp4"
+    },
+    "grouped_id": null,
+    "reply": null,
+    "reactions": []
+  },
+  {
+    "id": 5676160,
+    "date": "2026-08-27T18:00:47+00:00",
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 5801195821147890645,
+      "mime": "video/mp4",
+      "size": 29055,
+      "attrs": [
+        "DocumentAttributeVideo",
+        "DocumentAttributeAnimated",
+        "DocumentAttributeFilename"
+      ],
+      "duration": 6.0,
+      "w": 186,
+      "h": 104,
+      "file_name": "animation_29055.mp4"
+    },
+    "grouped_id": null,
+    "reply": null,
+    "reactions": []
+  },
+  {
+    "id": 5676162,
+    "date": "2026-08-27T18:02:12+00:00",
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 5801195821147890646,
+      "mime": "audio/mpeg",
+      "size": 13401987,
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "audio_13401987.mp3"
+    },
+    "grouped_id": null,
+    "reply": null,
+    "reactions": []
+  },
+  {
+    "id": 5676163,
+    "date": "2026-08-27T18:02:17+00:00",
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 5801195821147890647,
+      "mime": "video/mp4",
+      "size": 594165,
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "video_594165.mp4"
+    },
+    "grouped_id": null,
+    "reply": null,
+    "reactions": []
+  },
+  {
+    "id": 5676164,
+    "date": "2026-08-27T18:02:17+00:00",
+    "text": "RECOVERY_FINAL_20260827_REPLY_PARENT_010",
+    "sender_id": 165649921,
+    "media": null,
+    "grouped_id": null,
+    "reply": null,
+    "reactions": []
+  },
+  {
+    "id": 5676165,
+    "date": "2026-08-27T18:02:18+00:00",
+    "text": "RECOVERY_FINAL_20260827_REPLY_CHILD_011",
+    "sender_id": 165649921,
+    "media": null,
+    "grouped_id": null,
+    "reply": {
+      "reply_to_msg_id": 5676164,
+      "top_id": null
+    },
+    "reactions": []
+  },
+  {
+    "id": 5676166,
+    "date": "2026-08-27T18:02:18+00:00",
+    "text": "RECOVERY_FINAL_20260827_REACTION_TARGET_012",
+    "sender_id": 165649921,
+    "media": null,
+    "grouped_id": null,
+    "reply": null,
+    "reactions": [
+      {
+        "emoji": "👍",
+        "count": 1,
+        "chosen": false
+      }
+    ]
+  },
+  {
+    "id": 5676167,
+    "date": "2026-08-27T18:02:18+00:00",
+    "text": "RECOVERY_FINAL_20260827_CUSTOM_EMOJI_014 🫠",
+    "sender_id": 165649921,
+    "media": null,
+    "grouped_id": null,
+    "reply": null,
+    "reactions": []
+  },
+  {
+    "id": 5676168,
+    "date": "2026-08-27T18:02:20+00:00",
+    "text": "RECOVERY_FINAL_20260827_ALBUM_015_TWO_PHOTOS",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaPhoto",
+      "photo_id": 5801195821607883011,
+      "sizes": [
+        "PhotoStrippedSize",
+        "PhotoSize",
+        "PhotoSize",
+        "PhotoSizeProgressive"
+      ]
+    },
+    "grouped_id": 14302829920241196,
+    "reply": null,
+    "reactions": []
+  },
+  {
+    "id": 5676169,
+    "date": "2026-08-27T18:02:20+00:00",
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaPhoto",
+      "photo_id": 5801195821607883011,
+      "sizes": [
+        "PhotoStrippedSize",
+        "PhotoSize",
+        "PhotoSize",
+        "PhotoSizeProgressive"
+      ]
+    },
+    "grouped_id": 14302829920241196,
+    "reply": null,
+    "reactions": []
+  },
+  {
+    "id": 5676170,
+    "date": "2026-08-27T18:02:20+00:00",
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 5801195821147890646,
+      "mime": "audio/mpeg",
+      "size": 13401987,
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "audio_13401987.mp3"
+    },
+    "grouped_id": null,
+    "reply": null,
+    "reactions": []
+  },
+  {
+    "id": 5676171,
+    "date": "2026-08-27T18:02:21+00:00",
+    "text": "RECOVERY_FINAL_20260827_ADJACENT_MEDIA_017",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaPhoto",
+      "photo_id": 5801195821607883011,
+      "sizes": [
+        "PhotoStrippedSize",
+        "PhotoSize",
+        "PhotoSize",
+        "PhotoSizeProgressive"
+      ]
+    },
+    "grouped_id": null,
+    "reply": null,
+    "reactions": []
+  },
+  {
+    "id": 5676172,
+    "date": "2026-08-27T18:02:21+00:00",
+    "text": "RECOVERY_FINAL_20260827_ADJACENT_TEXT_017 immediately after media",
+    "sender_id": 165649921,
+    "media": null,
+    "grouped_id": null,
+    "reply": null,
+    "reactions": []
+  }
+]

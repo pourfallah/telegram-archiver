@@ -1,0 +1,378 @@
+{
+  "run": "RECOVERY_FINAL_20260827",
+  "generated_at": "2026-08-27T20:03:54.853484+00:00",
+  "production_import_job": 49,
+  "export_id": 15,
+  "source_fixture_messages": 18,
+  "message_map": [
+    {
+      "source_id": 5676154,
+      "target_id": 2518,
+      "source_text": "RECOVERY_FINAL_20260827_TEXT_001_PLAIN",
+      "source_sender": 165649921,
+      "match": "exact",
+      "timestamp": "TIMESTAMP_RESTORED",
+      "sender": "SENDER_IDENTICAL",
+      "media_class": "NO_MEDIA",
+      "source_media": null
+    },
+    {
+      "source_id": 5676155,
+      "target_id": 2519,
+      "source_text": "RECOVERY_FINAL_20260827_FORMATTED_002 bold italic underline ",
+      "source_sender": 165649921,
+      "match": "exact",
+      "timestamp": "TIMESTAMP_RESTORED",
+      "sender": "SENDER_IDENTICAL",
+      "media_class": "NO_MEDIA",
+      "source_media": "MessageMediaWebPage"
+    },
+    {
+      "source_id": 5676156,
+      "target_id": 2521,
+      "source_text": "",
+      "source_sender": 165649921,
+      "match": "exact",
+      "timestamp": "TIMESTAMP_RESTORED",
+      "sender": "SENDER_IDENTICAL",
+      "media_class": "PHOTO_EXACT",
+      "source_media": "MessageMediaPhoto"
+    },
+    {
+      "source_id": 5676157,
+      "target_id": 2522,
+      "source_text": "RECOVERY_FINAL_20260827_PHOTO_CAPTION_004 😍",
+      "source_sender": 165649921,
+      "match": "exact",
+      "timestamp": "TIMESTAMP_RESTORED",
+      "sender": "SENDER_IDENTICAL",
+      "media_class": "PHOTO_EXACT",
+      "source_media": "MessageMediaPhoto"
+    },
+    {
+      "source_id": 5676158,
+      "target_id": 2525,
+      "source_text": "",
+      "source_sender": 165649921,
+      "match": "exact",
+      "timestamp": "TIMESTAMP_RESTORED",
+      "sender": "SENDER_IDENTICAL",
+      "media_class": "DOCUMENT_EXACT",
+      "source_media": "MessageMediaDocument"
+    },
+    {
+      "source_id": 5676159,
+      "target_id": 2528,
+      "source_text": "",
+      "source_sender": 165649921,
+      "match": "exact",
+      "timestamp": "TIMESTAMP_RESTORED",
+      "sender": "SENDER_IDENTICAL",
+      "media_class": "VIDEO_EXACT",
+      "source_media": "MessageMediaDocument"
+    },
+    {
+      "source_id": 5676160,
+      "target_id": 2529,
+      "source_text": "",
+      "source_sender": 165649921,
+      "match": "exact",
+      "timestamp": "TIMESTAMP_RESTORED",
+      "sender": "SENDER_IDENTICAL",
+      "media_class": "VIDEO_EXACT",
+      "source_media": "MessageMediaDocument"
+    },
+    {
+      "source_id": 5676162,
+      "target_id": 2547,
+      "source_text": "",
+      "source_sender": 165649921,
+      "match": "exact",
+      "timestamp": "TIMESTAMP_RESTORED",
+      "sender": "SENDER_IDENTICAL",
+      "media_class": "DOCUMENT_EXACT",
+      "source_media": "MessageMediaDocument"
+    },
+    {
+      "source_id": 5676163,
+      "target_id": 2532,
+      "source_text": "",
+      "source_sender": 165649921,
+      "match": "exact",
+      "timestamp": "TIMESTAMP_RESTORED",
+      "sender": "SENDER_IDENTICAL",
+      "media_class": "DOCUMENT_EXACT",
+      "source_media": "MessageMediaDocument"
+    },
+    {
+      "source_id": 5676164,
+      "target_id": 2535,
+      "source_text": "RECOVERY_FINAL_20260827_REPLY_PARENT_010",
+      "source_sender": 165649921,
+      "match": "exact",
+      "timestamp": "TIMESTAMP_RESTORED",
+      "sender": "SENDER_IDENTICAL",
+      "media_class": "NO_MEDIA",
+      "source_media": null
+    },
+    {
+      "source_id": 5676165,
+      "target_id": 2539,
+      "source_text": "RECOVERY_FINAL_20260827_REPLY_CHILD_011",
+      "source_sender": 165649921,
+      "match": "exact",
+      "timestamp": "TIMESTAMP_RESTORED",
+      "sender": "SENDER_IDENTICAL",
+      "media_class": "NO_MEDIA",
+      "source_media": null
+    },
+    {
+      "source_id": 5676166,
+      "target_id": 2540,
+      "source_text": "RECOVERY_FINAL_20260827_REACTION_TARGET_012",
+      "source_sender": 165649921,
+      "match": "exact",
+      "timestamp": "TIMESTAMP_RESTORED",
+      "sender": "SENDER_IDENTICAL",
+      "media_class": "NO_MEDIA",
+      "source_media": null
+    },
+    {
+      "source_id": 5676167,
+      "target_id": 2541,
+      "source_text": "RECOVERY_FINAL_20260827_CUSTOM_EMOJI_014 🫠",
+      "source_sender": 165649921,
+      "match": "exact",
+      "timestamp": "TIMESTAMP_RESTORED",
+      "sender": "SENDER_IDENTICAL",
+      "media_class": "NO_MEDIA",
+      "source_media": null
+    },
+    {
+      "source_id": 5676168,
+      "target_id": 2542,
+      "source_text": "RECOVERY_FINAL_20260827_ALBUM_015_TWO_PHOTOS",
+      "source_sender": 165649921,
+      "match": "exact",
+      "timestamp": "TIMESTAMP_RESTORED",
+      "sender": "SENDER_IDENTICAL",
+      "media_class": "PHOTO_EXACT",
+      "source_media": "MessageMediaPhoto"
+    },
+    {
+      "source_id": 5676169,
+      "target_id": 2543,
+      "source_text": "",
+      "source_sender": 165649921,
+      "match": "exact",
+      "timestamp": "TIMESTAMP_RESTORED",
+      "sender": "SENDER_IDENTICAL",
+      "media_class": "PHOTO_EXACT",
+      "source_media": "MessageMediaPhoto"
+    },
+    {
+      "source_id": 5676170,
+      "target_id": 2547,
+      "source_text": "",
+      "source_sender": 165649921,
+      "match": "exact",
+      "timestamp": "TIMESTAMP_RESTORED",
+      "sender": "SENDER_IDENTICAL",
+      "media_class": "DOCUMENT_EXACT",
+      "source_media": "MessageMediaDocument"
+    },
+    {
+      "source_id": 5676171,
+      "target_id": 2548,
+      "source_text": "RECOVERY_FINAL_20260827_ADJACENT_MEDIA_017",
+      "source_sender": 165649921,
+      "match": "exact",
+      "timestamp": "TIMESTAMP_RESTORED",
+      "sender": "SENDER_IDENTICAL",
+      "media_class": "PHOTO_EXACT",
+      "source_media": "MessageMediaPhoto"
+    },
+    {
+      "source_id": 5676172,
+      "target_id": 2551,
+      "source_text": "RECOVERY_FINAL_20260827_ADJACENT_TEXT_017 immediately after ",
+      "source_sender": 165649921,
+      "match": "exact",
+      "timestamp": "TIMESTAMP_RESTORED",
+      "sender": "SENDER_IDENTICAL",
+      "media_class": "NO_MEDIA",
+      "source_media": null
+    }
+  ],
+  "verification": {
+    "overall": "PARTIAL",
+    "counts": {
+      "source": 160,
+      "target": 245,
+      "matched": 157,
+      "matched_exact": 155,
+      "matched_text_only": 2
+    }
+  },
+  "media_trace": {
+    "import_id": 8178946182766270516,
+    "declared": 8,
+    "uploaded": 8,
+    "succeeded": 8,
+    "failed": 0
+  },
+  "target_snapshot_fixture": [
+    {
+      "target_id": 2516,
+      "media_ctor": null,
+      "text": "RECOVERY_FINAL_20260827_TEXT_001_PLAIN",
+      "grouped": null,
+      "imported_fwd": false
+    },
+    {
+      "target_id": 2517,
+      "media_ctor": "MessageMediaWebPage",
+      "text": "RECOVERY_FINAL_20260827_FORMATTED_002 bold italic ",
+      "grouped": null,
+      "imported_fwd": false
+    },
+    {
+      "target_id": 2518,
+      "media_ctor": null,
+      "text": "RECOVERY_FINAL_20260827_TEXT_001_PLAIN",
+      "grouped": null,
+      "imported_fwd": true
+    },
+    {
+      "target_id": 2519,
+      "media_ctor": null,
+      "text": "RECOVERY_FINAL_20260827_FORMATTED_002 bold italic ",
+      "grouped": null,
+      "imported_fwd": true
+    },
+    {
+      "target_id": 2522,
+      "media_ctor": "MessageMediaPhoto",
+      "text": "RECOVERY_FINAL_20260827_PHOTO_CAPTION_004 😍",
+      "grouped": null,
+      "imported_fwd": false
+    },
+    {
+      "target_id": 2523,
+      "media_ctor": null,
+      "text": "<attached: photo_0.jpg>\nRECOVERY_FINAL_20260827_PH",
+      "grouped": null,
+      "imported_fwd": true
+    },
+    {
+      "target_id": 2533,
+      "media_ctor": null,
+      "text": "RECOVERY_FINAL_20260827_REPLY_PARENT_010",
+      "grouped": null,
+      "imported_fwd": false
+    },
+    {
+      "target_id": 2535,
+      "media_ctor": null,
+      "text": "RECOVERY_FINAL_20260827_REPLY_PARENT_010",
+      "grouped": null,
+      "imported_fwd": true
+    },
+    {
+      "target_id": 2536,
+      "media_ctor": null,
+      "text": "RECOVERY_FINAL_20260827_REPLY_CHILD_011",
+      "grouped": null,
+      "imported_fwd": false
+    },
+    {
+      "target_id": 2537,
+      "media_ctor": null,
+      "text": "RECOVERY_FINAL_20260827_REACTION_TARGET_012",
+      "grouped": null,
+      "imported_fwd": false
+    },
+    {
+      "target_id": 2538,
+      "media_ctor": null,
+      "text": "RECOVERY_FINAL_20260827_CUSTOM_EMOJI_014 🫠",
+      "grouped": null,
+      "imported_fwd": false
+    },
+    {
+      "target_id": 2539,
+      "media_ctor": null,
+      "text": "RECOVERY_FINAL_20260827_REPLY_CHILD_011",
+      "grouped": null,
+      "imported_fwd": true
+    },
+    {
+      "target_id": 2540,
+      "media_ctor": null,
+      "text": "RECOVERY_FINAL_20260827_REACTION_TARGET_012",
+      "grouped": null,
+      "imported_fwd": true
+    },
+    {
+      "target_id": 2541,
+      "media_ctor": null,
+      "text": "RECOVERY_FINAL_20260827_CUSTOM_EMOJI_014 🫠",
+      "grouped": null,
+      "imported_fwd": true
+    },
+    {
+      "target_id": 2542,
+      "media_ctor": "MessageMediaPhoto",
+      "text": "RECOVERY_FINAL_20260827_ALBUM_015_TWO_PHOTOS",
+      "grouped": 14302829920241196,
+      "imported_fwd": false
+    },
+    {
+      "target_id": 2545,
+      "media_ctor": null,
+      "text": "<attached: photo_0.jpg>\nRECOVERY_FINAL_20260827_AL",
+      "grouped": null,
+      "imported_fwd": true
+    },
+    {
+      "target_id": 2548,
+      "media_ctor": "MessageMediaPhoto",
+      "text": "RECOVERY_FINAL_20260827_ADJACENT_MEDIA_017",
+      "grouped": null,
+      "imported_fwd": false
+    },
+    {
+      "target_id": 2549,
+      "media_ctor": null,
+      "text": "RECOVERY_FINAL_20260827_ADJACENT_TEXT_017 immediat",
+      "grouped": null,
+      "imported_fwd": false
+    },
+    {
+      "target_id": 2550,
+      "media_ctor": null,
+      "text": "<attached: photo_0.jpg>\nRECOVERY_FINAL_20260827_AD",
+      "grouped": null,
+      "imported_fwd": true
+    },
+    {
+      "target_id": 2551,
+      "media_ctor": null,
+      "text": "RECOVERY_FINAL_20260827_ADJACENT_TEXT_017 immediat",
+      "grouped": null,
+      "imported_fwd": true
+    }
+  ],
+  "fidelity_classification": {
+    "TEXT": "EXACT (timestamp+text+entities verbatim; TIMESTAMP_RESTORED, SENDER_IDENTICAL)",
+    "FORMATTED": "PARTIAL — entities restored as text; link-preview (MessageMediaWebPage) not archived/restored (intentional)",
+    "PHOTO": "EXACT when unique filename (target MessageMediaPhoto, real photo_id); PARTIAL/FAILED where one file reused across messages (only 1 of N binds; others import as literal <attached:> text)",
+    "PHOTO+CAPTION": "PARTIAL — photo binds + caption ON the same imported message when filename unique; filename-collision cases import caption text only",
+    "ALBUM": "PARTIAL — grouped_id preserved on bound copies; filename collision limits",
+    "REPLY": "ARCHIVAL_ONLY — Telegram import does not re-parent message ids; reply_to not reconstructable",
+    "REACTION": "CURRENT_STATE_RECONSTRUCTED — reactor identity correct (B via B session); A-reactor TARGET_NOT_IN_REACTOR_VIEW (never faked)",
+    "SENDER": "EXACT for importer-origin; Telegram re-maps imported authors to importer (documented)",
+    "TIMESTAMP": "EXACT (TIMESTAMP_RESTORED 155/157)",
+    "MEDIA": "PROVEN — real MessageMediaPhoto/Document bound via canonical service (MEDIA_IMPORT_TRACE 8/8 uploads)"
+  }
+}

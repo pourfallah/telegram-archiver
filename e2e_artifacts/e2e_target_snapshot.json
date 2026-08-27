@@ -1,0 +1,1097 @@
+[
+  {
+    "target_id": 2310,
+    "date": "2026-08-27T05:47:38",
+    "fwd_date": "2026-08-27T05:47:38",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 4938397261441796221,
+      "mime": "application/octet-stream",
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "document_326.bin"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2312,
+    "date": "2026-08-27T05:47:46",
+    "fwd_date": "2026-08-27T05:47:46",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 4938397261441796222,
+      "mime": "application/octet-stream",
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "document_37.bin"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2316,
+    "date": "2026-08-27T05:47:58",
+    "fwd_date": "2026-08-27T05:47:58",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 4938397261441796221,
+      "mime": "application/octet-stream",
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "document_326.bin"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2319,
+    "date": "2026-08-27T06:02:05",
+    "fwd_date": "2026-08-27T06:02:05",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 4938397261441796221,
+      "mime": "application/octet-stream",
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "document_326.bin"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2323,
+    "date": "2026-08-27T06:04:53",
+    "fwd_date": "2026-08-27T06:04:53",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 4938397261441796221,
+      "mime": "application/octet-stream",
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "document_326.bin"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2330,
+    "date": "2026-08-27T07:07:40",
+    "fwd_date": "2026-08-27T07:07:40",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 4938397261441796221,
+      "mime": "application/octet-stream",
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "document_326.bin"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2332,
+    "date": "2026-08-27T07:07:40",
+    "fwd_date": "2026-08-27T07:07:40",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 4938397261441796222,
+      "mime": "application/octet-stream",
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "document_37.bin"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2346,
+    "date": "2026-08-27T07:07:40",
+    "fwd_date": "2026-08-27T07:07:40",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 4938397261441796221,
+      "mime": "application/octet-stream",
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "document_326.bin"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2357,
+    "date": "2026-08-27T07:12:55",
+    "fwd_date": "2026-08-27T05:47:38",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 4936145461628111073,
+      "mime": "application/octet-stream",
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "document_326.bin"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2359,
+    "date": "2026-08-27T07:12:55",
+    "fwd_date": "2026-08-27T05:47:46",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 4936145461628111072,
+      "mime": "application/octet-stream",
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "document_37.bin"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2363,
+    "date": "2026-08-27T07:12:55",
+    "fwd_date": "2026-08-27T05:47:58",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 4936145461628111073,
+      "mime": "application/octet-stream",
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "document_326.bin"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2366,
+    "date": "2026-08-27T07:12:55",
+    "fwd_date": "2026-08-27T06:02:05",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 4936145461628111073,
+      "mime": "application/octet-stream",
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "document_326.bin"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2370,
+    "date": "2026-08-27T07:12:55",
+    "fwd_date": "2026-08-27T06:04:53",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 4936145461628111073,
+      "mime": "application/octet-stream",
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "document_326.bin"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2377,
+    "date": "2026-08-27T07:12:55",
+    "fwd_date": "2026-08-27T05:47:38",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 4936145461628111069,
+      "mime": "application/octet-stream",
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "document_326.bin"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2379,
+    "date": "2026-08-27T07:12:55",
+    "fwd_date": "2026-08-27T05:47:46",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 4936145461628111068,
+      "mime": "application/octet-stream",
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "document_37.bin"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2383,
+    "date": "2026-08-27T07:12:55",
+    "fwd_date": "2026-08-27T05:47:58",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 4936145461628111069,
+      "mime": "application/octet-stream",
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "document_326.bin"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2386,
+    "date": "2026-08-27T07:12:55",
+    "fwd_date": "2026-08-27T06:02:05",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 4936145461628111069,
+      "mime": "application/octet-stream",
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "document_326.bin"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2390,
+    "date": "2026-08-27T07:12:55",
+    "fwd_date": "2026-08-27T06:04:53",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 4936145461628111069,
+      "mime": "application/octet-stream",
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "document_326.bin"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2397,
+    "date": "2026-08-27T07:12:55",
+    "fwd_date": "2026-08-27T05:47:38",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 4936145461628111066,
+      "mime": "application/octet-stream",
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "document_326.bin"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2399,
+    "date": "2026-08-27T07:12:55",
+    "fwd_date": "2026-08-27T05:47:46",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 4936145461628111065,
+      "mime": "application/octet-stream",
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "document_37.bin"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2403,
+    "date": "2026-08-27T07:12:55",
+    "fwd_date": "2026-08-27T05:47:58",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 4936145461628111066,
+      "mime": "application/octet-stream",
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "document_326.bin"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2406,
+    "date": "2026-08-27T07:12:55",
+    "fwd_date": "2026-08-27T06:02:05",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 4936145461628111066,
+      "mime": "application/octet-stream",
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "document_326.bin"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2410,
+    "date": "2026-08-27T07:12:55",
+    "fwd_date": "2026-08-27T06:04:53",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 4936145461628111066,
+      "mime": "application/octet-stream",
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "document_326.bin"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2417,
+    "date": "2026-08-27T07:12:55",
+    "fwd_date": "2026-08-27T05:47:38",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 4936145461628111064,
+      "mime": "application/octet-stream",
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "document_326.bin"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2419,
+    "date": "2026-08-27T07:12:55",
+    "fwd_date": "2026-08-27T05:47:46",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 4936145461628111063,
+      "mime": "application/octet-stream",
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "document_37.bin"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2423,
+    "date": "2026-08-27T07:12:55",
+    "fwd_date": "2026-08-27T05:47:58",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 4936145461628111064,
+      "mime": "application/octet-stream",
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "document_326.bin"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2426,
+    "date": "2026-08-27T07:12:55",
+    "fwd_date": "2026-08-27T06:02:05",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 4936145461628111064,
+      "mime": "application/octet-stream",
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "document_326.bin"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2430,
+    "date": "2026-08-27T07:12:55",
+    "fwd_date": "2026-08-27T06:04:53",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 4936145461628111064,
+      "mime": "application/octet-stream",
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "document_326.bin"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2468,
+    "date": "2026-08-27T13:08:44",
+    "fwd_date": null,
+    "imported_fwd": false,
+    "text": "PRODPARITY_20260827_FORMATTED_002_1787836122 bold *italic* u",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaWebPage"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2492,
+    "date": "2026-08-27T13:12:09",
+    "fwd_date": null,
+    "imported_fwd": false,
+    "text": "PRODPARITY_20260827_FORMATTED_002_1787836327 bold *italic* u",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaWebPage"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2516,
+    "date": "2026-08-27T18:00:38",
+    "fwd_date": null,
+    "imported_fwd": false,
+    "text": "RECOVERY_FINAL_20260827_TEXT_001_PLAIN",
+    "sender_id": 165649921,
+    "media": null,
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2517,
+    "date": "2026-08-27T18:00:38",
+    "fwd_date": null,
+    "imported_fwd": false,
+    "text": "RECOVERY_FINAL_20260827_FORMATTED_002 bold italic underline ",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaWebPage"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2518,
+    "date": "2026-08-27T18:00:38",
+    "fwd_date": "2026-08-27T18:00:38",
+    "imported_fwd": true,
+    "text": "RECOVERY_FINAL_20260827_TEXT_001_PLAIN",
+    "sender_id": 165649921,
+    "media": null,
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2519,
+    "date": "2026-08-27T18:00:38",
+    "fwd_date": "2026-08-27T18:00:38",
+    "imported_fwd": true,
+    "text": "RECOVERY_FINAL_20260827_FORMATTED_002 bold italic underline ",
+    "sender_id": 165649921,
+    "media": null,
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2520,
+    "date": "2026-08-27T18:00:38",
+    "fwd_date": "2026-08-27T18:00:38",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaPhoto",
+      "photo_id": 4938397261901794369
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2521,
+    "date": "2026-08-27T18:00:39",
+    "fwd_date": null,
+    "imported_fwd": false,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaPhoto",
+      "photo_id": 5801195821607883011
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2522,
+    "date": "2026-08-27T18:00:39",
+    "fwd_date": null,
+    "imported_fwd": false,
+    "text": "RECOVERY_FINAL_20260827_PHOTO_CAPTION_004 😍",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaPhoto",
+      "photo_id": 5801195821607883011
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2523,
+    "date": "2026-08-27T18:00:39",
+    "fwd_date": "2026-08-27T18:00:39",
+    "imported_fwd": true,
+    "text": "<attached: photo_0.jpg>\nRECOVERY_FINAL_20260827_PHOTO_CAPTIO",
+    "sender_id": 165649921,
+    "media": null,
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2524,
+    "date": "2026-08-27T18:00:39",
+    "fwd_date": "2026-08-27T18:00:39",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 4938397261441796223,
+      "mime": "video/webm",
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "document_136095.webm"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2525,
+    "date": "2026-08-27T18:00:40",
+    "fwd_date": null,
+    "imported_fwd": false,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 5801195821147890643,
+      "mime": "video/webm",
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "sticker_136095.webm"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2526,
+    "date": "2026-08-27T18:00:47",
+    "fwd_date": null,
+    "imported_fwd": false,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 5801195821147890644,
+      "mime": "video/mp4",
+      "attrs": [
+        "DocumentAttributeVideo",
+        "DocumentAttributeFilename"
+      ],
+      "w": 720,
+      "h": 1280,
+      "duration": 8.545,
+      "file_name": "video_1029540.mp4"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2527,
+    "date": "2026-08-27T18:00:47",
+    "fwd_date": null,
+    "imported_fwd": false,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 5801195821147890645,
+      "mime": "video/mp4",
+      "attrs": [
+        "DocumentAttributeVideo",
+        "DocumentAttributeAnimated",
+        "DocumentAttributeFilename"
+      ],
+      "w": 186,
+      "h": 104,
+      "duration": 6.0,
+      "file_name": "animation_29055.mp4"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2528,
+    "date": "2026-08-27T18:00:47",
+    "fwd_date": "2026-08-27T18:00:47",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 4938397261441796224,
+      "mime": "video/mp4",
+      "attrs": [
+        "DocumentAttributeVideo",
+        "DocumentAttributeFilename"
+      ],
+      "w": 720,
+      "h": 1280,
+      "duration": 8.545,
+      "file_name": "video_1029540.mp4"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2529,
+    "date": "2026-08-27T18:00:47",
+    "fwd_date": "2026-08-27T18:00:47",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 4938397261441796225,
+      "mime": "video/mp4",
+      "attrs": [
+        "DocumentAttributeVideo",
+        "DocumentAttributeAnimated",
+        "DocumentAttributeFilename"
+      ],
+      "w": 186,
+      "h": 104,
+      "duration": 6.0,
+      "file_name": "animation_29055.mp4"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2530,
+    "date": "2026-08-27T18:02:12",
+    "fwd_date": null,
+    "imported_fwd": false,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 5801195821147890646,
+      "mime": "audio/mpeg",
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "audio_13401987.mp3"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2531,
+    "date": "2026-08-27T18:02:12",
+    "fwd_date": "2026-08-27T18:02:12",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 4938397261441796226,
+      "mime": "audio/mpeg",
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "document_13401987.mp3"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2532,
+    "date": "2026-08-27T18:02:17",
+    "fwd_date": null,
+    "imported_fwd": false,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 5801195821147890647,
+      "mime": "video/mp4",
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "video_594165.mp4"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2533,
+    "date": "2026-08-27T18:02:17",
+    "fwd_date": null,
+    "imported_fwd": false,
+    "text": "RECOVERY_FINAL_20260827_REPLY_PARENT_010",
+    "sender_id": 165649921,
+    "media": null,
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2534,
+    "date": "2026-08-27T18:02:17",
+    "fwd_date": "2026-08-27T18:02:17",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 4938397261441796227,
+      "mime": "video/mp4",
+      "attrs": [
+        "DocumentAttributeVideo",
+        "DocumentAttributeFilename"
+      ],
+      "w": 886,
+      "h": 518,
+      "duration": 11.123,
+      "file_name": "document_594165.mp4"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2535,
+    "date": "2026-08-27T18:02:17",
+    "fwd_date": "2026-08-27T18:02:17",
+    "imported_fwd": true,
+    "text": "RECOVERY_FINAL_20260827_REPLY_PARENT_010",
+    "sender_id": 165649921,
+    "media": null,
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2536,
+    "date": "2026-08-27T18:02:18",
+    "fwd_date": null,
+    "imported_fwd": false,
+    "text": "RECOVERY_FINAL_20260827_REPLY_CHILD_011",
+    "sender_id": 165649921,
+    "media": null,
+    "grouped_id": null,
+    "reply_to": 2298
+  },
+  {
+    "target_id": 2537,
+    "date": "2026-08-27T18:02:18",
+    "fwd_date": null,
+    "imported_fwd": false,
+    "text": "RECOVERY_FINAL_20260827_REACTION_TARGET_012",
+    "sender_id": 165649921,
+    "media": null,
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2538,
+    "date": "2026-08-27T18:02:18",
+    "fwd_date": null,
+    "imported_fwd": false,
+    "text": "RECOVERY_FINAL_20260827_CUSTOM_EMOJI_014 🫠",
+    "sender_id": 165649921,
+    "media": null,
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2539,
+    "date": "2026-08-27T18:02:18",
+    "fwd_date": "2026-08-27T18:02:18",
+    "imported_fwd": true,
+    "text": "RECOVERY_FINAL_20260827_REPLY_CHILD_011",
+    "sender_id": 165649921,
+    "media": null,
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2540,
+    "date": "2026-08-27T18:02:18",
+    "fwd_date": "2026-08-27T18:02:18",
+    "imported_fwd": true,
+    "text": "RECOVERY_FINAL_20260827_REACTION_TARGET_012",
+    "sender_id": 165649921,
+    "media": null,
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2541,
+    "date": "2026-08-27T18:02:18",
+    "fwd_date": "2026-08-27T18:02:18",
+    "imported_fwd": true,
+    "text": "RECOVERY_FINAL_20260827_CUSTOM_EMOJI_014 🫠",
+    "sender_id": 165649921,
+    "media": null,
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2542,
+    "date": "2026-08-27T18:02:20",
+    "fwd_date": null,
+    "imported_fwd": false,
+    "text": "RECOVERY_FINAL_20260827_ALBUM_015_TWO_PHOTOS",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaPhoto",
+      "photo_id": 5801195821607883011
+    },
+    "grouped_id": 14302829920241196,
+    "reply_to": null
+  },
+  {
+    "target_id": 2543,
+    "date": "2026-08-27T18:02:20",
+    "fwd_date": null,
+    "imported_fwd": false,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaPhoto",
+      "photo_id": 5801195821607883011
+    },
+    "grouped_id": 14302829920241196,
+    "reply_to": null
+  },
+  {
+    "target_id": 2544,
+    "date": "2026-08-27T18:02:20",
+    "fwd_date": "2026-08-27T18:02:12",
+    "imported_fwd": false,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 5801195821147890646,
+      "mime": "audio/mpeg",
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "audio_13401987.mp3"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2545,
+    "date": "2026-08-27T18:02:20",
+    "fwd_date": "2026-08-27T18:02:20",
+    "imported_fwd": true,
+    "text": "<attached: photo_0.jpg>\nRECOVERY_FINAL_20260827_ALBUM_015_TW",
+    "sender_id": 165649921,
+    "media": null,
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2546,
+    "date": "2026-08-27T18:02:20",
+    "fwd_date": "2026-08-27T18:02:20",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaPhoto",
+      "photo_id": 4938397261901794369
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2547,
+    "date": "2026-08-27T18:02:20",
+    "fwd_date": "2026-08-27T18:02:20",
+    "imported_fwd": true,
+    "text": "",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaDocument",
+      "doc_id": 4938397261441796226,
+      "mime": "audio/mpeg",
+      "attrs": [
+        "DocumentAttributeFilename"
+      ],
+      "file_name": "document_13401987.mp3"
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2548,
+    "date": "2026-08-27T18:02:21",
+    "fwd_date": null,
+    "imported_fwd": false,
+    "text": "RECOVERY_FINAL_20260827_ADJACENT_MEDIA_017",
+    "sender_id": 165649921,
+    "media": {
+      "ctor": "MessageMediaPhoto",
+      "photo_id": 5801195821607883011
+    },
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2549,
+    "date": "2026-08-27T18:02:21",
+    "fwd_date": null,
+    "imported_fwd": false,
+    "text": "RECOVERY_FINAL_20260827_ADJACENT_TEXT_017 immediately after ",
+    "sender_id": 165649921,
+    "media": null,
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2550,
+    "date": "2026-08-27T18:02:21",
+    "fwd_date": "2026-08-27T18:02:21",
+    "imported_fwd": true,
+    "text": "<attached: photo_0.jpg>\nRECOVERY_FINAL_20260827_ADJACENT_MED",
+    "sender_id": 165649921,
+    "media": null,
+    "grouped_id": null,
+    "reply_to": null
+  },
+  {
+    "target_id": 2551,
+    "date": "2026-08-27T18:02:21",
+    "fwd_date": "2026-08-27T18:02:21",
+    "imported_fwd": true,
+    "text": "RECOVERY_FINAL_20260827_ADJACENT_TEXT_017 immediately after ",
+    "sender_id": 165649921,
+    "media": null,
+    "grouped_id": null,
+    "reply_to": null
+  }
+]

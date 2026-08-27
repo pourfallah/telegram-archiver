@@ -1,0 +1,90 @@
+{
+  "import_id": 8178946182766270516,
+  "target_peer_id": 0,
+  "total_declared": 8,
+  "total_uploaded": 8,
+  "total_succeeded": 8,
+  "total_failed": 0,
+  "uploads": [
+    {
+      "source_message_id": 0,
+      "filename": "document_326.bin",
+      "media_type": "document",
+      "input_media_ctor": "InputMediaUploadedDocument",
+      "returned_ctor": "MessageMediaDocument",
+      "returned_photo_id": null,
+      "returned_document_id": 4938397261441796221,
+      "error": null
+    },
+    {
+      "source_message_id": 0,
+      "filename": "document_37.bin",
+      "media_type": "document",
+      "input_media_ctor": "InputMediaUploadedDocument",
+      "returned_ctor": "MessageMediaDocument",
+      "returned_photo_id": null,
+      "returned_document_id": 4938397261441796222,
+      "error": null
+    },
+    {
+      "source_message_id": 0,
+      "filename": "photo_0.jpg",
+      "media_type": "photo",
+      "input_media_ctor": "InputMediaUploadedPhoto",
+      "returned_ctor": "MessageMediaPhoto",
+      "returned_photo_id": 4938397261901794369,
+      "returned_document_id": null,
+      "error": null
+    },
+    {
+      "source_message_id": 0,
+      "filename": "document_136095.webm",
+      "media_type": "document",
+      "input_media_ctor": "InputMediaUploadedDocument",
+      "returned_ctor": "MessageMediaDocument",
+      "returned_photo_id": null,
+      "returned_document_id": 4938397261441796223,
+      "error": null
+    },
+    {
+      "source_message_id": 0,
+      "filename": "video_1029540.mp4",
+      "media_type": "video",
+      "input_media_ctor": "InputMediaUploadedDocument",
+      "returned_ctor": "MessageMediaDocument",
+      "returned_photo_id": null,
+      "returned_document_id": 4938397261441796224,
+      "error": null
+    },
+    {
+      "source_message_id": 0,
+      "filename": "animation_29055.mp4",
+      "media_type": "animation",
+      "input_media_ctor": "InputMediaUploadedDocument",
+      "returned_ctor": "MessageMediaDocument",
+      "returned_photo_id": null,
+      "returned_document_id": 4938397261441796225,
+      "error": null
+    },
+    {
+      "source_message_id": 0,
+      "filename": "document_13401987.mp3",
+      "media_type": "document",
+      "input_media_ctor": "InputMediaUploadedDocument",
+      "returned_ctor": "MessageMediaDocument",
+      "returned_photo_id": null,
+      "returned_document_id": 4938397261441796226,
+      "error": null
+    },
+    {
+      "source_message_id": 0,
+      "filename": "document_594165.mp4",
+      "media_type": "document",
+      "input_media_ctor": "InputMediaUploadedDocument",
+      "returned_ctor": "MessageMediaDocument",
+      "returned_photo_id": null,
+      "returned_document_id": 4938397261441796227,
+      "error": null
+    }
+  ]
+}

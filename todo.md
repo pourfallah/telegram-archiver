@@ -129,16 +129,28 @@ Per master prompt §28-§50, marker prefix `RECOVERY_FINAL_20260827_`.
       link-preview normalization → export 15 PASS 160/160.
 - [x] B-side NOT cleared (guardrail §49 — real David chat protected); recovery runs on fresh
       imported block (delta), non-destructive.
-- [ ] Normal app IMPORT via /api/import/start-real (job 46) → FIXED worker UnboundLocalError
-      (redundant local re-import); rebuilding worker now, will re-run job.
-- [ ] Real target MTProto read → field-by-field compare.
-- [ ] FINAL_RECOVERY_REPORT.html/.json + PRODUCTION_PARITY_REPORT.md with real evidence.
-- [ ] Preserve ALL debug artifacts (run_id.txt, source_*, media traces, target snapshots).
+- [x] Normal app IMPORT via /api/import/start-real (job 49) — COMPLETED status=partial.
+       Media uploaded 8/8 via canonical service; MEDIA_IMPORT_TRACE.json written.
+       Fixed 3 more real bugs the E2E surfaced (await, video-attr int, src_map).
+- [x] Real target MTProto read (target_snapshot.py): MessageMediaPhoto bound (2520 fwd_imported),
+      photo+caption one message, timestamps restored; duplicate-filename messages import as
+      literal <attached:> text (honest limitation).
+- [x] FINAL_RECOVERY_REPORT.html/.json + PRODUCTION_PARITY_REPORT.md (real evidence, e2e_artifacts/).
+- [x] Preserve ALL debug artifacts: e2e_artifacts/ (final_recovery_report.*, MEDIA_IMPORT_TRACE.json,
+      e2e_source_snapshot.json, e2e_target_snapshot.json) + server verification/ dir.
+
+- [ ] (optional) Fix duplicate-filename media binding so reused files each get a token
+      (would require per-line filenames or upload count == line count). Documented as Telegram limitation.
 
 ### Bugs found by real E2E (production path) — none visible to unit tests
 - [x] export_verification entities ctor-vs-type vocabulary false FAIL
 - [x] export_verification MessageMediaWebPage link-preview not normalized
 - [x] import_tasks UnboundLocalError (local re-import shadowing) — caught by job 46
+- [x] import_tasks media upload: TelegramImportedMediaService._upload_file was sync
+      returning unawaited client.upload_file() coroutine → "a TLObject was expected".
+      FIXED (await), verified job 49.
+- [x] media upload: DocumentAttributeVideo needs int w/h/duration at wire level
+      ("required argument is not an integer" — real E2E job 48). FIXED (or 0); verified job 49.
 
 ### PHASE 4 — Report
 - [ ] Final summary: architecture understood, exact flow, previous failure, root cause,
