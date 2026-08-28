@@ -220,9 +220,15 @@ def build_import_file(
                     "media_type": (media_items[0].get("type") if media_items else "document"),
                 }
                 line = f"{ts} - {name}: {_media_marker(attach_name, 'document')}"
-                if text:
-                    line += f"\n{_escape(text)}"
+                # CAPTION SEPARATE (verified live 2026-08-28): a caption line
+                # following <attached: X> on its own line makes Telegram treat the
+                # WHOLE block as literal text — media does NOT bind. The only
+                # structure that binds media is a bare <attached: X> line. So the
+                # caption is emitted as a SEPARATE timestamped message line (the
+                # WhatsApp import behavior: media own message + caption own message).
                 f.write(line + "\n")
+                if text:
+                    f.write(f"{ts} - {name}: {_escape(text)}\n")
             elif text:
                 f.write(f"{ts} - {name}: {_escape(text)}\n")
             else:

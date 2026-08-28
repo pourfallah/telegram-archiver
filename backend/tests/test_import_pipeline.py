@@ -56,17 +56,22 @@ def test_import_photo(tmp_path):
 
 
 def test_import_photo_caption_one_block(tmp_path):
-    """TEST 3 — photo+caption is ONE message block: caption is the physical
-    line AFTER the marker line (no new timestamp prefix)."""
+    """TEST 3 — photo+caption: media line + SEPARATE timestamped caption line.
+
+    LIVE-VERIFIED (2026-08-28): a caption continuation line after <attached: X>
+    makes Telegram import the WHOLE block as literal text (media does NOT bind).
+    Only a bare <attached: X> line binds media. So the caption is emitted as its
+    own timestamped message line → media own msg + caption own msg (CAPTION_SEPARATE,
+    matching WhatsApp import behavior)."""
     d = _archive(tmp_path, [
         _msg(1, "2024-06-01T12:30:00+00:00", 1, "A", "CAPTION_TEST_123", [
             {"type": "photo", "filename": "cap.jpg"}]),
     ])
     build_import_file(d, tmp_path / "import.txt")
     raw = (tmp_path / "import.txt").read_text(encoding="utf-8").splitlines()
-    assert len(raw) == 2, f"media+caption must be ONE block (2 physical lines), got {raw}"
+    assert len(raw) == 2, f"media + separate caption line, got {raw}"
     assert raw[0] == "[01/06/2024, 12:30:00] - A: <attached: cap.jpg>"
-    assert raw[1] == "CAPTION_TEST_123"
+    assert raw[1] == "[01/06/2024, 12:30:00] - A: CAPTION_TEST_123"
 
 
 def test_import_sticker_no_caption(tmp_path):
