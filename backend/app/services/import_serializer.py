@@ -35,7 +35,7 @@ from typing import Any
 # (offset of the target account from UTC, e.g. 210 for UTC+3:30). When unknown,
 # pass None and times are written as-is (UTC wall clock).
 def _format_ts(
-    dt: str | datetime | None, tz_offset_minutes: int | None = None
+    dt: str | datetime | None, tz_offset_minutes: int | None = None, plus_seconds: int = 0
 ) -> str:
     """Format a timestamp in the canonical WhatsApp export style.
 
@@ -66,6 +66,8 @@ def _format_ts(
         # shift true instant into the target account's local wall clock
         dt = dt + timedelta(minutes=tz_offset_minutes)
         dt = dt.replace(tzinfo=None)
+    if plus_seconds:
+        dt = dt + timedelta(seconds=plus_seconds)
     return dt.strftime("[%d/%m/%Y, %H:%M:%S]")
 
 
@@ -228,7 +230,15 @@ def build_import_file(
                 # WhatsApp import behavior: media own message + caption own message).
                 f.write(line + "\n")
                 if text:
-                    f.write(f"{ts} - {name}: {_escape(text)}\n")
+                    # CAPTION SEPARATE: Telegram's parser treats consecutive lines
+                    # with the SAME timestamp as a single block (caption continuation
+                    # or literal merge). To make the caption a genuine separate message,
+                    # we emit it with a +1-second timestamp. The media line (bare
+                    # <attached: X>) binds as its own MessageMedia, and the caption
+                    # becomes a separate text message. This is CAPTION_SEPARATE.
+                    from datetime import timedelta
+                    cap_ts = _format_ts(m.get("date"), tz_offset_minutes, plus_seconds=1)
+                    f.write(f"{cap_ts} - {name}: {_escape(text)}\n")
             elif text:
                 f.write(f"{ts} - {name}: {_escape(text)}\n")
             else:
