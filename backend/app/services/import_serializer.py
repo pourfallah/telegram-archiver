@@ -88,6 +88,21 @@ def _media_marker(filename: str, media_type: str) -> str:
     return f"<attached: {filename}>"
 
 
+def _unique_attach_name(base_filename: str, msg_id: int) -> str:
+    """Unique per-message attach name for a repeatedly-used archive file.
+
+    Telegram binds each uploaded media token to an import line by the EXACT
+    '<attached: NAME>' match — one token per line. When the same archive file
+    is referenced by several source messages, a shared name would bind only one
+    of them. "{stem}__{msg_id}{ext}" keeps the name unique per line while the
+    media-upload stage can still recover the real base file + source id.
+    """
+    stem, dot, ext = base_filename.rpartition(".")
+    if not dot:
+        stem, ext = base_filename, ""
+    return f"{stem}__{msg_id}{dot}{ext}"
+
+
 def build_import_file(
     export_dir: Path,
     out_file: Path,
@@ -150,6 +165,15 @@ def build_import_file(
     media_refs = 0
     users = set()
     dates = []
+    # Per-filename use counter: Telegram binds uploaded media to import lines by
+    # the EXACT <attached: FILE> name, ONE token per line. If the same archive
+    # file is referenced by N source messages, a single token can bind at most
+    # one of them (the rest import as literal text). Give each repeated file a
+    # unique per-message attach name "{stem}__{msg_id}{ext}" so every line gets
+    # its own token. Single-use files keep their plain name (backwards
+    # compatible with existing packages/tests).
+    fname_use_count: dict[str, int] = {}
+    attach_to_source: dict[str, dict] = {}
 
     with out_file.open("w", encoding="utf-8") as f:
         for m in messages:
@@ -180,7 +204,19 @@ def build_import_file(
                     media_refs += 1  # Count each media item for media_count
 
             if media_fname:
-                line = f"{ts} - {name}: {_media_marker(media_fname, 'document')}"
+                # Disambiguate repeated files so each line binds its own token.
+                fname_use_count[media_fname] = fname_use_count.get(media_fname, 0) + 1
+                mid = int(m.get("id") or 0)
+                if fname_use_count[media_fname] > 1:
+                    attach_name = _unique_attach_name(media_fname, mid)
+                else:
+                    attach_name = media_fname
+                attach_to_source[attach_name] = {
+                    "source_message_id": mid,
+                    "base_filename": media_fname,
+                    "media_type": (media_items[0].get("type") if media_items else "document"),
+                }
+                line = f"{ts} - {name}: {_media_marker(attach_name, 'document')}"
                 if text:
                     line += f"\n{_escape(text)}"
                 f.write(line + "\n")
@@ -189,6 +225,15 @@ def build_import_file(
             else:
                 # completely empty message — skip (nothing to import)
                 continue
+
+    # Sidecar map so the media-upload stage can resolve each attach name back to
+    # the real archive file and source message (fixes source_message_id=0 and
+    # duplicate-filename binding in one place).
+    try:
+        (out_file.parent / "media_attach_map.json").write_text(
+            json.dumps(attach_to_source, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:  # noqa: BLE001 — map is additive
+        pass
 
     stats = {
         "messages": len(messages),

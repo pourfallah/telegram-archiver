@@ -385,40 +385,72 @@ def build_media_specs_from_archive(
     except Exception as e:
         logger.warning(f"Could not load media extra from archive: {e}")
     
-    # Build specs for each wanted file
+    # Build specs — ONE SPEC PER <attached:> LINE.
+    #
+    # Telegram binds each uploaded token to an import line by the EXACT
+    # file_name, one token per line. Deduplicating by filename (the old `seen`
+    # set) collapsed repeated files, so when one archive file was used by N
+    # source messages only a single token existed and the other lines imported
+    # as literal <attached:> text (proven by real E2E job 49). The serializer
+    # now emits unique "{stem}__{msg_id}{ext}" names for repeats and writes a
+    # sidecar map; we resolve each line's attach name through that map (or by
+    # stripping the __{id} suffix) to the real base file + source message id.
+    attach_map: dict[str, dict] = {}
+    try:
+        # production layout: export_dir/import/import.txt + map beside it
+        map_path = export_dir / "import" / "media_attach_map.json"
+        if not map_path.exists():
+            map_path = export_dir / "media_attach_map.json"  # custom out_file callers
+        if map_path.exists():
+            attach_map = json.loads(map_path.read_text(encoding="utf-8"))
+    except Exception as e:  # noqa: BLE001 — map is additive
+        logger.warning(f"Could not load media_attach_map.json: {e}")
+
+    def _resolve(attach_name: str):
+        """(base_filename, source_message_id) for an attach name."""
+        hit = attach_map.get(attach_name)
+        if hit:
+            return hit.get("base_filename") or attach_name, int(hit.get("source_message_id") or 0)
+        # fallback: strip a trailing __{digits} uniquifier
+        import re as _re
+        m = _re.match(r"^(.*)__(\d+)(\.[^.]+)?$", attach_name)
+        if m:
+            base = m.group(1) + (m.group(3) or "")
+            return base, int(m.group(2))
+        return attach_name, 0
+
     specs = []
-    seen = set()
-    
     for fname in wanted_filenames:
-        if fname in seen:
-            continue
-        seen.add(fname)
-        
-        # Find file in media directory
+        base_name, source_message_id = _resolve(fname)
+
+        # Find the real file in the media directory (by base name).
         file_path = None
         media_type = "document"
         if media_src.exists():
             for type_dir in media_src.iterdir():
                 if not type_dir.is_dir():
                     continue
-                candidate = type_dir / fname
+                candidate = type_dir / base_name
                 if candidate.exists():
                     file_path = candidate
                     media_type = type_dir.name
                     break
-        
+
         if not file_path:
-            logger.warning(f"Media file not found: {fname}")
+            logger.warning(f"Media file not found: {base_name} (attach {fname})")
             continue
-        
+
         # Get file info
         stat = file_path.stat()
         mime_type = _guess_mime(file_path)
-        extra = media_extra.get(fname, {})
-        
+        extra = media_extra.get(base_name, {})
+        # grouped_id for album binding comes from the archive media item
+        if "grouped_id" in extra and not extra.get("grouped_id"):
+            extra.pop("grouped_id", None)
+
         spec = MediaUploadSpec(
-            source_message_id=0,  # Will be filled by caller if needed
-            filename=fname,
+            source_message_id=source_message_id,
+            filename=fname,          # upload under the exact attach name
             media_type=media_type,
             mime_type=mime_type,
             file_path=file_path,
