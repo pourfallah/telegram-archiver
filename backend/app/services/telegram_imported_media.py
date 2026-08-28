@@ -411,12 +411,14 @@ def build_media_specs_from_archive(
         hit = attach_map.get(attach_name)
         if hit:
             return hit.get("base_filename") or attach_name, int(hit.get("source_message_id") or 0)
-        # fallback: strip a trailing __{digits} uniquifier
+        # fallback: unique names are "m{msg_id}{ext}" (repeated files); the real
+        # base file is found via the sidecar map, or by stripping the prefix.
         import re as _re
-        m = _re.match(r"^(.*)__(\d+)(\.[^.]+)?$", attach_name)
+        m = _re.match(r"^m(\d+)(\.[^.]+)?$", attach_name)
         if m:
-            base = m.group(1) + (m.group(3) or "")
-            return base, int(m.group(2))
+            # without the sidecar map we cannot know the original base filename;
+            # fall back to searching media dir by the unique name itself.
+            return attach_name, int(m.group(1))
         return attach_name, 0
 
     specs = []

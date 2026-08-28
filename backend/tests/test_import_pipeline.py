@@ -165,16 +165,17 @@ def test_repeated_filename_gets_unique_attach_names(tmp_path):
     ])
     build_import_file(d, tmp_path / "import.txt")
     content = (tmp_path / "import.txt").read_text(encoding="utf-8")
-    # first use keeps the plain name; second use is disambiguated with the msg id
+    # first use keeps the plain name; second use is disambiguated (m{id} scheme —
+    # shares no substring with the base filename so the parser can't normalize it)
     assert "<attached: photo_0.jpg>" in content
-    assert "<attached: photo_0__2.jpg>" in content
+    assert "<attached: m2.jpg>" in content
     assert content.count("<attached:") == 2
 
     # sidecar map written
     from app.services.import_serializer import _unique_attach_name
-    assert _unique_attach_name("photo_0.jpg", 2) == "photo_0__2.jpg"
-    assert _unique_attach_name("sticker.webp", 5) == "sticker__5.webp"
-    assert _unique_attach_name("noext", 7) == "noext__7"
+    assert _unique_attach_name("photo_0.jpg", 2) == "m2.jpg"
+    assert _unique_attach_name("sticker.webp", 5) == "m5.webp"
+    assert _unique_attach_name("noext", 7) == "m7"
 
 
 def test_media_specs_one_per_line_with_source_id(tmp_path):
@@ -202,9 +203,9 @@ def test_media_specs_one_per_line_with_source_id(tmp_path):
     assert len(specs) == 2, f"expected 2 specs (one per line), got {len(specs)}"
     by_name = {s.filename: s for s in specs}
     assert "photo_0.jpg" in by_name and by_name["photo_0.jpg"].source_message_id == 1
-    assert "photo_0__2.jpg" in by_name and by_name["photo_0__2.jpg"].source_message_id == 2
+    assert "m2.jpg" in by_name and by_name["m2.jpg"].source_message_id == 2
     # both resolve to the real base file
-    assert by_name["photo_0__2.jpg"].file_path.name == "photo_0.jpg"
+    assert by_name["m2.jpg"].file_path.name == "photo_0.jpg"
 
 
 @pytest.fixture(autouse=True)

@@ -94,13 +94,16 @@ def _unique_attach_name(base_filename: str, msg_id: int) -> str:
     Telegram binds each uploaded media token to an import line by the EXACT
     '<attached: NAME>' match — one token per line. When the same archive file
     is referenced by several source messages, a shared name would bind only one
-    of them. "{stem}__{msg_id}{ext}" keeps the name unique per line while the
-    media-upload stage can still recover the real base file + source id.
+    of them.
+
+    Use a name that does NOT share a substring with the original filename, so
+    the parser cannot match it to the wrong token.  E.g. "photo_0.jpg" for the
+    first use; "m{msg_id}.jpg" for repeats (m{id} is short and unique).
     """
     stem, dot, ext = base_filename.rpartition(".")
     if not dot:
-        stem, ext = base_filename, ""
-    return f"{stem}__{msg_id}{dot}{ext}"
+        ext = ""
+    return f"m{msg_id}{dot}{ext}"
 
 
 def build_import_file(
