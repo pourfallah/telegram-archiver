@@ -1,0 +1,28 @@
+{
+  "text": 5679721,
+  "formatted": 5679722,
+  "emoji": 5679723,
+  "custom_emoji": "NOT_AVAILABLE",
+  "photo": 5679724,
+  "photo_caption": 5679725,
+  "sticker": 5679726,
+  "sticker_set": "Peepo_Pepe",
+  "video": 5679727,
+  "gif": 5679728,
+  "audio": 5679729,
+  "voice": 5679730,
+  "document": 5679731,
+  "album": [
+    5679732,
+    5679733
+  ],
+  "album_caption": 5679732,
+  "adjacent_text": 5679734,
+  "reply": 5233,
+  "reaction_b_view_text_id": 5232,
+  "reaction_a": "\ud83d\udc4d",
+  "reaction_b": "\u2764",
+  "forward_audio": 5679736,
+  "marker_prefix": "RECOVERY_V2_FINAL_20260829_",
+  "created_at": "2026-08-29T09:01:48.771208+00:00"
+}

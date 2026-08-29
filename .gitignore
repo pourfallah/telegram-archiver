@@ -37,3 +37,8 @@ frontend/.vite/
 # Logs
 *.log
 logs/
+
+# recovery v2 credentials (never commit)
+telegram_recovery_v2/secrets/
+telegram_recovery_v2/.env
+telegram_recovery_v2/test_runs/
