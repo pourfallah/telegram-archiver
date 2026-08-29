@@ -5,9 +5,9 @@ per-message state that the import protocol does NOT carry, where Telegram
 technically permits it:
 
   - reactions      -> messages.sendReaction (CURRENT-state reconstruction)
-  - replies        -> NOT reconstructable (no re-parenting RPC) — ARCHIVAL_ONLY
-  - sticker entity -> NOT reconstructable (no sticker-attr attach RPC) — DOCUMENT_ONLY
-  - custom emoji   -> NOT reconstructable as entities via sendMessage reliably — PARTIAL
+    - replies        -> reconstructable via delete+resend-with-reply_to (idempotent)
+    - sticker entity -> NOT reconstructable as sticker (no sticker-attr attach RPC) — DOCUMENT_ONLY
+    - custom emoji   -> NOT reconstructable as entities via sendMessage — PARTIAL
 
 Hard rules (never violated):
   1. A reaction by user X is ONLY sent by an authenticated session of user X.
@@ -321,3 +321,99 @@ def classify_plan(plan: list[dict]) -> dict[str, int]:
     from collections import Counter
 
     return Counter(item.get("outcome") or item.get("status") for item in plan)
+
+
+# ---------------------------------------------------------------------------
+# Reply reconstruction (delete+resend with reply_to)
+# ---------------------------------------------------------------------------
+def plan_replies(
+    source_messages: list[dict],
+    mapping: dict[int, dict],
+) -> list[dict]:
+    """Plan reply re-linking for imported messages.
+
+    The WhatsApp-style import format has NO reply syntax, so after import the
+    child arrives as plain text. Telegram provides no "re-parent" RPC, but a
+    reply CAN be reconstructed by re-sending the child text with
+    ``reply_to=target_parent_id`` (live-verified 2026-08-29: message 5115
+    reply_to=5104 matched). We only plan messages whose SOURCE archive row
+    carries a real ``reply_to.reply_to_msg_id`` and whose parent is also mapped.
+    """
+    plan: list[dict] = []
+    parent_by_id = {int(s.get("id") or 0): s for s in source_messages}
+    for src in source_messages:
+        sid = int(src.get("id") or 0)
+        tgt = mapping.get(sid)
+        if not tgt:
+            continue
+        rt = src.get("reply_to") or {}
+        parent_src = rt.get("reply_to_msg_id")
+        if not parent_src:
+            continue
+        parent_tgt = mapping.get(int(parent_src))
+        if not parent_tgt:
+            continue
+        text = (src.get("text") or "").strip()
+        if not text:
+            continue  # empty-text reply child has nothing to resend
+        plan.append({
+            "source_message_id": sid,
+            "target_id": tgt["target_id"],
+            "parent_source_id": int(parent_src),
+            "parent_target_id": parent_tgt["target_id"],
+            "text": text[:1024],
+            "status": "REPLY_RECONSTRUCTABLE",
+        })
+    return plan
+
+
+async def reconstruct_replies(
+    client,
+    peer,
+    plan: list[dict],
+    new_target_ids: set[int] | None = None,
+) -> list[dict]:
+    """Execute reply re-linking on the importing account.
+
+    For each planned child: find the imported plain-text copy in the target
+    (by normalized text), delete it, then re-send the same text with
+    ``reply_to=parent_target_id`` so the reply link is live.
+
+    Safety:
+      - only messages in new_target_ids are touched (delta of THIS import)
+      - the child is deleted and re-sent with the SAME text (idempotent per
+        import; a re-run re-links the newest copy)
+      - never touches unrelated messages
+    """
+    from telethon import functions
+
+    results: list[dict] = []
+    for item in plan:
+        tid = item.get("target_id")
+        if new_target_ids is not None and tid not in new_target_ids:
+            item["outcome"] = "SKIPPED_NOT_NEW"
+            results.append(item)
+            continue
+        text = item.get("text", "")
+        parent_tid = item.get("parent_target_id")
+        try:
+            # find the imported plain-text child in the target chat
+            msgs = await client.get_messages(peer, limit=120)
+            child = None
+            for m in msgs:
+                if (m.message or "").strip() == text and m.id in (new_target_ids or {m.id for m in msgs}):
+                    child = m
+                    break
+            if child is None:
+                item["outcome"] = "CHILD_NOT_FOUND"
+                results.append(item)
+                continue
+            await client(functions.messages.DeleteMessagesRequest(
+                id=[child.id], revoke=False))
+            sent = await client.send_message(peer, text, reply_to=parent_tid)
+            item["outcome"] = "RECONSTRUCTED_AFTER_IMPORT"
+            item["new_target_id"] = sent.id
+        except Exception as exc:  # noqa: BLE001
+            item["outcome"] = f"FAILED: {type(exc).__name__}"
+        results.append(item)
+    return results

@@ -153,14 +153,24 @@ class TelegramImportedMediaService:
         extra = spec.extra or {}
         
         if spec.media_type == "sticker":
-            # Sticker: alt emoji + empty stickerset (server may upgrade)
-            attributes.append(types.DocumentAttributeSticker(
-                alt=str(extra.get("alt", "")),
-                stickerset=types.InputStickerSetEmpty()
-            ))
-            w, h = extra.get("width"), extra.get("height")
-            if w and h:
-                attributes.append(types.DocumentAttributeImageSize(w=int(w), h=int(h)))
+            # Sticker: alt emoji + empty stickerset (server may upgrade).
+            # BUT: animated .tgs stickers (mime application/x-tgsticker) with
+            # DocumentAttributeSticker + InputStickerSetEmpty make Telegram
+            # drop the entire media — the message materializes as EMPTY
+            # (media=None, text=''). Live-proven job 54 / export 18.
+            # For .tgs, skip the sticker attr and import as a plain document
+            # so the file is at least preserved (DOCUMENT_ONLY, honest).
+            mime = (spec.mime_type or "").lower()
+            if mime == "application/x-tgsticker":
+                pass  # import as plain document with filename only
+            else:
+                attributes.append(types.DocumentAttributeSticker(
+                    alt=str(extra.get("alt", "")),
+                    stickerset=types.InputStickerSetEmpty()
+                ))
+                w, h = extra.get("width"), extra.get("height")
+                if w and h:
+                    attributes.append(types.DocumentAttributeImageSize(w=int(w), h=int(h)))
         
         elif spec.media_type in ("animation", "gif"):
             attributes.append(types.DocumentAttributeAnimated())

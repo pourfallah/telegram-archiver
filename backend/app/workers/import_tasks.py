@@ -675,7 +675,30 @@ async def _run_import_async(job_id: int, local_factory) -> dict:
                     logger.warning("Reaction reconstruction failed", exc_info=True)
                     report["reaction_reconstruction"] = {"enabled": recon_enabled, "error": True}
 
-                # Re-write the report so reaction_reconstruction is included
+                # ---- Reply reconstruction (delete+resend with reply_to) ----
+                # The import format has no reply syntax, so imported children land
+                # as plain text. We re-link them by re-sending with reply_to.
+                try:
+                    reply_enabled = bool((job.options or {}).get("reconstruct_replies", True))
+                    rplan = recon.plan_replies(src_map[-limit:], mapping)
+                    if reply_enabled:
+                        routcomes = await recon.reconstruct_replies(
+                            client, peer, rplan,
+                            new_target_ids={d.get("id") for d in target_dicts},
+                        )
+                    else:
+                        routcomes = [{**p, "outcome": "PLAN_ONLY_DISABLED"} for p in rplan]
+                    report["reply_reconstruction"] = {
+                        "enabled": reply_enabled,
+                        "plan": rplan,
+                        "outcomes": routcomes,
+                        "summary": recon.classify_plan(routcomes),
+                    }
+                except Exception:  # noqa: BLE001
+                    logger.warning("Reply reconstruction failed", exc_info=True)
+                    report["reply_reconstruction"] = {"enabled": False, "error": True}
+
+                # Re-write the report so reaction/reply reconstruction is included
                 write_report(report, report_dir)
 
                 # Reaction recovery + sticker recovery reports

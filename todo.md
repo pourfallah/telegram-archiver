@@ -139,8 +139,15 @@ Per master prompt §28-§50, marker prefix `RECOVERY_FINAL_20260827_`.
 - [x] Preserve ALL debug artifacts: e2e_artifacts/ (final_recovery_report.*, MEDIA_IMPORT_TRACE.json,
       e2e_source_snapshot.json, e2e_target_snapshot.json) + server verification/ dir.
 
-- [ ] (optional) Fix duplicate-filename media binding so reused files each get a token
-      (would require per-line filenames or upload count == line count). Documented as Telegram limitation.
+- [x] (IN PROGRESS) Fix duplicate-filename media binding. Job 49 proved official
+      mechanism = one uploadImportedMedia token per <attached:> LINE (bound by exact
+      file_name). build_media_specs_from_archive dedups by filename → when one file is
+      used by N messages only 1-2 of N bind, rest import as literal <attached:> text.
+      FIXED v1: unique per-message attach names + one spec per line. Job 50 confirmed
+      per-line tokens upload, but caption lines still imported literal with BASE name —
+      Telegram normalizes '__{id}' duplicate suffixes. FIXED v2: attach name = 'm{msg_id}{ext}'
+      (no substring with base filename) so parser matches only its own token. Tests 8/8.
+      Rebuilding worker; re-run import (job 51) to verify caption+media binding live.
 
 ### Bugs found by real E2E (production path) — none visible to unit tests
 - [x] export_verification entities ctor-vs-type vocabulary false FAIL
