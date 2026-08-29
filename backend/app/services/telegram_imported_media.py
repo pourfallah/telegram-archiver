@@ -105,17 +105,26 @@ class TelegramImportedMediaService:
         if spec.media_type == "photo" or (spec.mime_type.startswith("image/") and spec.mime_type != "image/webp"):
             # Photo: use InputMediaUploadedPhoto (successful in caption_final_test.py)
             return types.InputMediaUploadedPhoto(file=handle)
-        
+
+        mime_type = spec.mime_type
+        # Animated .tgs stickers (mime application/x-tgsticker) bind an upload
+        # token but Telegram DROPS the media at materialization (empty message,
+        # media=None). Live-proven export 18/19/20. Trick: upload the SAME file
+        # with a generic mime so it materializes as a plain document — the file
+        # is preserved (DOCUMENT_ONLY classification, honest).
+        if (spec.media_type == "sticker" and (mime_type or "").lower() == "application/x-tgsticker"):
+            mime_type = "application/octet-stream"
+
         # Document types: use InputMediaUploadedDocument with attributes
         attributes = self._build_document_attributes(spec)
-        
+
         # Always add filename attribute if not present
         if not any(isinstance(a, types.DocumentAttributeFilename) for a in attributes):
             attributes.append(types.DocumentAttributeFilename(file_name=spec.filename))
-        
+
         return types.InputMediaUploadedDocument(
             file=handle,
-            mime_type=spec.mime_type,
+            mime_type=mime_type,
             attributes=attributes,
         )
     
