@@ -51,6 +51,27 @@ imported into A<->B and verified via target MTProto objects:
   both imported; target child `reply_to=None`).
 - **SOURCE_UNTOUCHED = YES** (checked after import).
 
+## Root cause of the user-visible "+1h/+3h times" report (2026-08-30 cleanup)
+
+The user reported imported hours off by +1h/+3h. Investigation showed A's view
+of A<->B contained **262 messages**: only 25 correct (this run's import, exact
+historical dates) and **237 stale experiment-pollution copies** left from
+EARLIER buggy-era runs (103646/121240/125341 fixture imports, `<attached:`
+literal-text junk, duplicate fixture messages) — all stamped at a single
+import-time `2026-08-30T10:22:26/27`. Those copies (with ±1h/±3h import-time
+stamps from different tz-bug eras) were what the user was looking at; they were
+NOT part of the corrected run. A's own message dates are exact (Δt=0 vs source).
+
+Fix applied: deleted the 237 stale copies from **A's view only**
+(`messages.deleteMessages id=..., revoke=False` — never touches B, never touches
+A<->C). A and B now both show exactly the same 25 messages at identical
+historical instants (verified: A-view 25 == B-view 25, content-identical).
+
+The rule going forward: after ANY B-side clear + import cycle, the same import
+copies also appear on A's side (finding #20) — if A's view must stay clean,
+delete those stale A-side copies with revoke=False, or keep the archive as the
+single source of truth.
+
 ## Hard limits of the official import API (evidence-based)
 
 1. **Replies cannot be imported** — the accepted WhatsApp file syntax has no reply
