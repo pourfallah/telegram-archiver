@@ -115,6 +115,22 @@ async def phase_sample(cfg, pool, run_dir: Path, count: int, seed: int, dry_run:
     if missing:
         raise SystemExit(f"ABORT: source ids missing live: {missing}")
 
+    # reply closure: fetch parents NOT in the catalog probe directly (spec 11)
+    reply_parent_ids = []
+    for i in selected_ids:
+        m = full_by_id.get(i)
+        if m and m.reply_to:
+            pid = m.reply_to.reply_to_msg_id
+            if pid and pid not in full_by_id and pid not in reply_parent_ids:
+                reply_parent_ids.append(pid)
+    if reply_parent_ids:
+        parents = await ca.get_messages(c, ids=reply_parent_ids)
+        for p in parents:
+            if p:
+                full_by_id[p.id] = p
+                selected_ids.append(p.id)
+        print(f"REPLY CLOSURE: added parents {reply_parent_ids}", flush=True)
+
     own_ids = {pool.tg_id("A"): "A", pool.tg_id("B"): "B"}
     # write sample artifacts
     sample_dir = run_dir / "sample"

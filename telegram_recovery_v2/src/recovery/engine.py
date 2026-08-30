@@ -234,6 +234,7 @@ class TelegramRecoveryEngine:
                     media_type=rec["type"],
                     is_photo=rec["type"] == "photo",
                     mime=rec.get("mime") or "application/octet-stream",
+                    orig_filename=rec.get("filename"),
                     trace={"source_message_id": m["source_message_id"], "media_id": m["media_id"]},
                 )
             )

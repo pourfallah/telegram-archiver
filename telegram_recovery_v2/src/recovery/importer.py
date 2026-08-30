@@ -53,6 +53,7 @@ class MediaImportSpec:
     media_type: str           # photo/video/gif/audio/voice/document/sticker
     is_photo: bool
     mime: str
+    orig_filename: str | None = None  # original Telegram filename (preserved)
     uploaded: types.MessageMedia | None = None
     trace: dict = field(default_factory=dict)
 
@@ -257,6 +258,7 @@ class ImportEngine:
                 sticker=spec.media_type == "sticker",
                 animated=spec.media_type == "gif",
                 file_handle=handle,
+                orig_filename=spec.orig_filename,
             )
             res = await client(
                 functions.messages.UploadImportedMediaRequest(

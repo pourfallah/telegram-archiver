@@ -37,7 +37,7 @@ def attach_name_for(media_id: str, mime: str | None, filename: str | None) -> st
     return f"{media_id}{ext}"
 
 
-def build_input_media(path: Path, mime: str, *, attach_name: str | None = None, media_type: str = "document", sticker: bool = False, animated: bool = False, file_handle=None):
+def build_input_media(path: Path, mime: str, *, attach_name: str | None = None, media_type: str = "document", sticker: bool = False, animated: bool = False, file_handle=None, orig_filename: str | None = None):
     """Build the InputMedia for uploadImportedMedia.
 
     Sticker handling: DocumentAttributeSticker is attached ONLY for static
@@ -50,11 +50,15 @@ def build_input_media(path: Path, mime: str, *, attach_name: str | None = None, 
     from telethon import types
 
     handle = file_handle if file_handle is not None else path  # uploaded InputFile
-    if mime.startswith("image/") and mime != "image/gif" and not path.name.endswith(".tgs"):
+    if (mime.startswith("image/") and mime != "image/gif"
+            and not path.name.endswith(".tgs") and mime != "image/webp"):
         from telethon import types as t
 
         return t.InputMediaUploadedPhoto(file=handle)
-    attrs = [types.DocumentAttributeFilename(attach_name or path.name)]
+    # preserve the ORIGINAL filename (spec: "mp3 file names must not change");
+    # attach_name stays the internal `<attached:>` token only.
+    display = orig_filename if orig_filename else (attach_name or path.name)
+    attrs = [types.DocumentAttributeFilename(display)]
     if path.name.endswith(".tgs") or mime == TGS_MIME or mime == "image/gif":
         # Animated .tgs stickers: bind an upload token but Telegram DROPS the
         # media at materialization (empty message) if uploaded with the native

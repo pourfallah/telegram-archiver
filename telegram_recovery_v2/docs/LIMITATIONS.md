@@ -26,6 +26,31 @@ ACTUAL target Telegram Message objects — never from upload RPC success or loca
 | REACTION | yes (reactor id from raw recent_reactions) | NO (import never carries reactions) | YES: per-reactor session messages.sendReaction | 8/8 verified via getMessagesReactions (same reactor, same emoji, same target) | RECONSTRUCTED 8/8 |
 | ALBUM (grouped_id) | yes | NO (grouped_id lost) | NOT possible via import/uploadImportedMedia | target grouped_id absent | GROUP_FLATTENED |
 
+## Corrected run (2026-08-29, `recovery_v2_sampled3`) — real A<->C history
+
+Real history test (11 years 2016-2026, 21 sampled msgs incl. reply chain)
+imported into A<->B and verified via target MTProto objects:
+
+- **TIMESTAMP 25/25 EXACT**: Δt = 0 s vs the source UTC instant on every
+  message, identical on A's and B's view. A displayed "+1 hour" when comparing
+  the two chats is DISPLAY-ONLY: the same instant renders at different local
+  hours when the two viewing sessions/devices use different timezone settings
+  (e.g. +3:30 vs +4:30). The stored `message.date` is exact.
+- **FILENAMES preserved** (fix): `build_input_media` now carries the ORIGINAL
+  filename in DocumentAttributeFilename (`Mohsen-Chavoshi-Madar-320.mp3`,
+  `AirBrush_..._farsroid.com_.apk`, `giphy.mp4`, `sticker.webp`, `IMG-*.jpg`);
+  the `<attached: mXXXX.ext>` token is internal only.
+- **webp sticker fixed**: image/webp no longer routes to InputMediaUploadedPhoto
+  (that returned MessageMediaEmpty → literal text). It now materializes as
+  STICKER with the original filename.
+- **LITERAL `<attached:>` text: 0/25** (every media line bound).
+- **CAPTION: CAPTION_SEPARATE only** (5 media captions → +1s sibling). Verified
+  that attaching captions post-import via editMessage is server-blocked
+  (`MessageIdInvalidError` on both A and B) — no attached captions possible.
+- **REPLY: NOT_RESTORED**, re-verified with a real chain (2675783 → 2675781
+  both imported; target child `reply_to=None`).
+- **SOURCE_UNTOUCHED = YES** (checked after import).
+
 ## Hard limits of the official import API (evidence-based)
 
 1. **Replies cannot be imported** — the accepted WhatsApp file syntax has no reply
@@ -50,6 +75,15 @@ ACTUAL target Telegram Message objects — never from upload RPC success or loca
 7. **Timestamps are interpreted in the importing account's timezone** — the import
    file must contain target-tz wall-clock times (UTC +3:30 for these accounts),
    otherwise every visible date shifts by the tz offset.
+8. **Imported messages cannot be edited** — both A and B get `MessageIdInvalidError`
+   on EditMessageRequest. So post-import caption merging and reply repair via
+   edit are impossible; only delete+resend (CURRENT-TIME) reconstruction exists.
+9. **image/webp must NOT use the photo upload path** — InputMediaUploadedPhoto on
+   webp returns MessageMediaEmpty and the line materializes as literal text.
+   Route webp through the document path (sticker attr preserved).
+10. **Original filenames must be passed separately** — the upload bind token
+    `<attached: mXXXX.ext>` is not a filename; without orig_filename the target
+    document gets the token name (e.g. m4693921.mp3) instead of the original.
 
 ## What the engine does NOT do
 
