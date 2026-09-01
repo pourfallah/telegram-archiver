@@ -37,7 +37,7 @@ try:
 except Exception:  # noqa: BLE001
     TelegramClient = None
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / "data"
 SESSIONS_DIR = DATA / "sessions"
 DB_PATH = DATA / "recovery.sqlite3"

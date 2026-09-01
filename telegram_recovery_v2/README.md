@@ -110,6 +110,19 @@ reply parents + full groups; P4 media/reactions for the sample only; P5 package
 `FINAL_HISTORICAL_SAMPLE_RECOVERY_REPORT.{json,html}`. SOURCE A<->C is read-only
 throughout; only TARGET A<->B is modified, and only with `--confirm`.
 
+One-command real test harness (defaults to DRY-RUN, only `--execute` touches B):
+
+```
+
+python -m recovery_v2.recovery_sample_test \
+    --source-peer +989****4546 --count 25            # dry: sample+package, B untouched
+python -m recovery_v2.recovery_sample_test \
+    --source-peer +989****4546 --execute              # confirm -> clear B + import + verify
+```
+
+Sessions are read from `data/sessions/` (written by `python -m recovery_v2.login_accounts`)
+or `RECOVERY_SESSION_{A,B}_STRING`; the harness refuses to run without them.
+
 ## One honest rule
 
 No claim of "restored" until the **actual Telegram target message objects**,
