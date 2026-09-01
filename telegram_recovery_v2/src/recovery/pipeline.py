@@ -342,14 +342,44 @@ def catalog_stats(catalog: list[dict]) -> dict:
 # ---------------------------------------------------------------------------
 # P3 — LAZY full fetch for the selected ids only (+ replies/groups closure)
 # ---------------------------------------------------------------------------
+def _msg_peer_id(m) -> int | None:
+    p = getattr(m, "peer_id", None)
+    if p is None:
+        return None
+    for n in ("user_id", "chat_id", "channel_id"):
+        v = getattr(p, n, None)
+        if v is not None:
+            return v
+    return getattr(p, "id", None)
+
+
+def _input_peer_id(peer) -> int | None:
+    for n in ("user_id", "chat_id", "channel_id"):
+        v = getattr(peer, n, None)
+        if v is not None:
+            return v
+    return getattr(peer, "id", None)
+
+
 async def fetch_by_ids(client: RecoveryClient, src_peer, ids: list[int]) -> list:
+    """Fetch full Messages ONLY for the given ids, via messages.getMessages(id=...).
+
+    Telethon's GetMessagesRequest accepts ONLY ``id`` (no peer). We keep the
+    source-peer guarantee explicit: resolve the source peer's real id once and
+    drop any returned message whose peer_id is not that peer, so a wrong peer
+    can never be silently fetched."""
     if not ids:
         return []
+    expected_peer = _input_peer_id(src_peer)
     out: list = []
     for i in range(0, len(ids), 90):
         chunk = ids[i:i + 90]
-        res = await client.call(f.messages.GetMessagesRequest(peer=src_peer, id=chunk))
-        out.extend(getattr(res, "messages", None) or [])
+        res = await client.call(f.messages.GetMessagesRequest(id=chunk))
+        for m in (getattr(res, "messages", None) or []):
+            pid = _msg_peer_id(m)
+            if expected_peer is not None and pid is not None and pid != expected_peer:
+                continue  # not from the source A<->C peer — never fetch the wrong chat
+            out.append(m)
     return out
 
 
