@@ -83,12 +83,13 @@ def test_full_offline_recovery_pipeline(tmp_path):
     assert r.source_to_target.exists()
     assert r.media_trace.exists()
 
-    # 9 per-field: photo caption attached; sticker (source id 3 -> row index 2)
-    row0 = report["rows"][0]
-    assert row0["caption"]["class"] == "CAPTION_ATTACHED"
-    assert row0["photo"]["class"] == "EXACT"
-    assert report["rows"][2]["sticker"]["class"] == "EXACT"
-    assert report["rows"][1]["audio"]["class"] == "EXACT"
+    # 9 per-field by SOURCE id (rows are newest-first, order-agnostic test)
+    by_src = {r["source_id"]: r for r in report["rows"]}
+    p = by_src[1]  # photo + caption
+    assert p["caption"]["class"] == "CAPTION_ATTACHED"
+    assert p["photo"]["class"] == "EXACT"
+    assert by_src[3]["sticker"]["class"] == "EXACT"
+    assert by_src[2]["audio"]["class"] == "EXACT"
 
 
 def await_(coro):

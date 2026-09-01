@@ -106,7 +106,14 @@ class FakeClient:
         name = type(request).__name__
         self.calls.append(name)
         if name == "GetHistoryRequest":
-            return FakeHistoryResult(self.history[: getattr(request, "limit", 500)])
+            # paginate like Telegram: offset_id = oldest already-seen; return
+            # strictly-older messages (id < offset_id), newest-first, up to limit.
+            # An empty page when nothing older remains is what ends discovery.
+            off = getattr(request, "offset_id", 0) or 0
+            limit = getattr(request, "limit", 500) or 500
+            older = [m for m in self.history if off == 0 or int(getattr(m, "id", 0)) < off]
+            older.sort(key=lambda m: int(getattr(m, "id", 0)), reverse=True)
+            return FakeHistoryResult(older[:limit])
         if name == "GetMessageReactionsListRequest":
             return _ReactorList(self.reactors.get(request.id, []))
         if name == "GetMessagesReactionsRequest":

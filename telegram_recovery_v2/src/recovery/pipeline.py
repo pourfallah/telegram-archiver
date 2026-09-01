@@ -202,8 +202,10 @@ async def discover_catalog(client: RecoveryClient, src_peer,
             checkpoint.update({"offset_id": offset_id,
                                "processed_count": len(seen), "updated_at": now_iso()})
             checkpoint_path.write_text(json.dumps(checkpoint, indent=2), encoding="utf-8")
-            if len(msgs) < SCAN_BATCH:
-                break
+            # NOTE: do NOT break on len(msgs) < SCAN_BATCH — messages.getHistory
+            # caps each page at 100 for this peer even when limit=500 is asked, so
+            # a partial first page does NOT mean the history ended. Only an EMPTY
+            # page (handled above) terminates discovery.
     checkpoint.update({"status": "complete", "updated_at": now_iso()})
     checkpoint_path.write_text(json.dumps(checkpoint, indent=2), encoding="utf-8")
     return {"messages": len(seen), "added_this_run": added}
