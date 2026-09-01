@@ -128,3 +128,57 @@ def test_account_store_no_secrets(tmp_path):
 def test_session_path_deterministic():
     a = L.session_path_for("+989394430100")
     assert a.name.startswith("account_p989394430100") and a.suffix == ".session"
+
+
+def test_upsert_accepts_last_verified_at_no_typeerror(tmp_path):
+    """Regression: Choice 3's store.upsert(..., last_verified_at=...) must work."""
+    db = tmp_path / "db.sqlite3"
+    store = L.AccountStore(db)
+    probe = "2026-09-01T10:00:00+00:00"
+    store.upsert("+989394430100", telegram_user_id=165649921, authorized=True,
+                 last_verified_at=probe)  # was: TypeError before the fix
+    row = store.get(1)
+    assert bool(row["authorized"]) is True
+    assert row["last_verified_at"] == probe
+    # default (no kwarg) still fills now_iso()
+    store.upsert("+989394430100", telegram_user_id=165649921, authorized=True)
+    assert bool(store.get(1)["authorized"]) is True
+
+
+def test_menu_choice3_test_session_completes(tmp_path, monkeypatch):
+    """Exact Choice 3 path (Account 1) must not raise TypeError."""
+    db = tmp_path / "db.sqlite3"
+    store = L.AccountStore(db)
+    sess = tmp_path / "account_p989394430100.session"
+    sess.write_text("SESSION_X", encoding="utf-8")
+    store.upsert("+989394430100", telegram_user_id=165649921, authorized=True,
+                 session_path=str(sess))
+
+    async def fake_check(api_id, api_hash, session_string):
+        return {"valid": True, "user": {"id": 165649921}, "dialogs": 3}
+
+    monkeypatch.setattr(L, "check_session", fake_check)
+    monkeypatch.setattr("builtins.input", lambda *a, **k: "1")
+    asyncio.run(L._test_session(store, 111, "hash"))
+    row = store.get(1)
+    assert bool(row["authorized"]) is True      # record not disturbed
+    assert row["last_verified_at"] is not None
+
+
+def test_choice3_account_two_also_works(tmp_path, monkeypatch):
+    db = tmp_path / "db.sqlite3"
+    store = L.AccountStore(db)
+    for i, (phone, uid) in enumerate((("+989394430100", 165649921),
+                                      ("+5511991966422", 7768075024)), 1):
+        sess = tmp_path / f"sess{i}.session"
+        sess.write_text("S" + str(i), encoding="utf-8")
+        store.upsert(phone, telegram_user_id=uid, authorized=True, session_path=str(sess))
+
+    async def fake_check(api_id, api_hash, session_string):
+        return {"valid": True, "user": {"id": 0}, "dialogs": 2}
+
+    monkeypatch.setattr(L, "check_session", fake_check)
+    monkeypatch.setattr("builtins.input", lambda *a, **k: "2")
+    asyncio.run(L._test_session(store, 111, "hash"))
+    assert bool(store.get(2)["authorized"]) is True
+    assert bool(store.get(1)["authorized"]) is True   # other record untouched

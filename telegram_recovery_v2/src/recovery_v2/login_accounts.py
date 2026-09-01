@@ -113,20 +113,22 @@ class AccountStore:
             pass
 
     def upsert(self, phone: str, telegram_user_id=None, first_name=None,
-               last_name=None, username=None, session_path=None, authorized=True) -> None:
+               last_name=None, username=None, session_path=None, authorized=True,
+               last_verified_at: str | None = None) -> None:
+        last_verified_at = last_verified_at or now_iso()
         self._conn.execute(
             """INSERT INTO telegram_accounts
                (phone, telegram_user_id, first_name, last_name, username,
                 session_path, authorized, created_at, updated_at, last_verified_at)
                VALUES (?,?,?,?,?,?,?,?,?,?)
                ON CONFLICT(phone) DO UPDATE SET
-                 telegram_user_id=excluded.telegram_user_id,
-                 first_name=excluded.first_name, last_name=excluded.last_name,
-                 username=excluded.username, session_path=excluded.session_path,
-                 authorized=excluded.authorized, updated_at=excluded.updated_at,
-                 last_verified_at=excluded.last_verified_at""",
+                telegram_user_id=excluded.telegram_user_id,
+                first_name=excluded.first_name, last_name=excluded.last_name,
+                username=excluded.username, session_path=excluded.session_path,
+                authorized=excluded.authorized, updated_at=excluded.updated_at,
+                last_verified_at=excluded.last_verified_at""",
             (phone, telegram_user_id, first_name, last_name, username, session_path,
-             int(authorized), now_iso(), now_iso(), now_iso()),
+             int(authorized), now_iso(), now_iso(), last_verified_at),
         )
         self._conn.commit()
 
