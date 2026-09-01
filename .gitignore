@@ -37,3 +37,8 @@ frontend/.vite/
 # Logs
 *.log
 logs/
+
+# Telegram Recovery v2 — local runtime artifacts
+telegram_recovery_v2/test_runs/
+telegram_recovery_v2/*.session
+telegram_recovery_v2/data/

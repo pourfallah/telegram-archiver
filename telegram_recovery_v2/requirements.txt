@@ -1,0 +1,7 @@
+# Core runtime dependencies.
+telethon>=1.36
+cryptography>=42
+
+# Development / test dependencies.
+pytest>=8.2
+pytest-asyncio>=0.23

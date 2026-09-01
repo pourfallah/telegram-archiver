@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "telegram-recovery-v2"
+version = "0.1.0"
+description = "Lossless Telegram recovery/reconstruction engine (source account -> lossless archive -> direct Telegram import -> real MTProto verification)"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "telethon>=1.36",
+    "cryptography>=42",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2",
+    "pytest-asyncio>=0.23",
+]
+
+[project.scripts]
+recovery-v2 = "recovery.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "-q"
+markers = [
+    "live: requires real Telegram credentials (RECOVERY_* live env) — not run by default",
+]
