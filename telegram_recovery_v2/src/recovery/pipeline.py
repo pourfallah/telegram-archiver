@@ -81,6 +81,22 @@ async def identify(peer_plain: dict) -> str:
     return f"peer_{peer_plain['type']}:{peer_plain['id']}"
 
 
+def assert_target_is_ab(src, tgt_peer_desc: dict) -> None:
+    """The TARGET peer must be the A<->B private chat, never the C chat.
+
+    A private chat peer, as seen by its owner, carries the OTHER user's id. So
+    the A<->B chat resolved via B has id == A's user id. If someone passes C's
+    phone as --target-peer, B would resolve the B<->C chat whose id == C's id,
+    != A's id -> refused. This guarantees a source C number can never become the
+    recovery target."""
+    a_id = src.my_id
+    tgt_id = tgt_peer_desc.get("id")
+    if a_id is not None and tgt_id is not None and tgt_id != a_id:
+        raise Abort(
+            f"target peer ({tgt_peer_desc.get('type')}:{tgt_id}) is NOT the A<->B "
+            f"private chat (its id must equal SOURCE A's user id {a_id}). Refusing.")
+
+
 # ---------------------------------------------------------------------------
 # P1 — lightweight resumable catalog (NO media, NO reactions, NO full raw)
 # ---------------------------------------------------------------------------
@@ -700,6 +716,7 @@ async def run_sample_history(cfg: RecoveryConfig, *, source_peer: str,
         tgt_id = await identify(tgt_peer_desc)
         if src_id == tgt_id:
             raise Abort("source peer == target peer; refusing")
+        assert_target_is_ab(src, tgt_peer_desc)
 
         print(f"SOURCE A<->C: {src_peer_desc}\nTARGET A<->B: {tgt_peer_desc}")
 
@@ -754,6 +771,7 @@ async def run_full_recovery(cfg: RecoveryConfig, *, run_id: str,
         tgt_peer = await tgt.get_peer(tgt_default)
         if src_id == tgt_id:
             raise Abort("source peer == target peer; refusing")
+        assert_target_is_ab(src, tgt_peer_desc)
 
         run = make_run(cfg, run_id)
         # P3+P4+P5: lazy fetch + media + package (B untouched)
