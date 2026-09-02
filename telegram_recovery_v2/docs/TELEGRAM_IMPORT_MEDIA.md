@@ -267,3 +267,27 @@ Verified live with source 5307 (photo+caption -> A<->B), target read back:
   ("photo restored + separate caption msg"); caption-on-same-message is not
   produced by Telegram's import.
 - Durable: T0/T1/T2/T3 keep the photo (`with_media>=1`), no rollback.
+
+### 7.7 Document/audio/video bind via `<attached: fname>` — ranges tested
+Follow-up typed probes (A<->C source -> A<->B), same 3-line shape + bracket+seconds:
+- **Photo** `InputMediaUploadedPhoto` -> target `MessageMediaPhoto` (durable, exact date).
+- **Video** `InputMediaUploadedDocument(+DocumentAttributeVideo,DocumentAttributeFilename)` ->
+  `MessageMediaDocument` durable.
+- **Audio** `InputMediaUploadedDocument(...)` with **`InputFileBig`** (103 parts, no md5)
+  -> `MessageMediaDocument` durable, date preserved.
+- **Animated sticker `.tgs`** (`DocumentAttributeSticker` + `InputStickerSetID`) ->
+  does NOT bind (imported as literal text). Treat Telegram-native animated stickers
+  as UNSUPPORTED_BY_TELEGRAM via foreign import (matching the old matrix's
+  "sticker ⚠️ check attrs / pending" caveat); a static WEBP sticker may differ and
+  is untested.
+
+Marker rule (measured): the **`<attached: filename>`** token binds BOTH photos and
+documents. The Android **`filename (file attached)`** form binds photos but NOT
+documents (documents imported as text with that token). Use `<attached: …>`.
+
+OPEN (date): import-time fallback observed — some imports preserved the exact
+historical `message.date`/`fwd.date` (photo 2015, audio 2026-08-05) while others
+(video batch) landed at `message.date = import time`. The file timestamp is not
+always applied. Needs investigation (likely tied to rapid/concurrent imports or a
+server race). A large `messages.initHistoryImport` flood (~74k s) was hit after
+~12 imports in ~2 h, blocking further live probing.
