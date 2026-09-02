@@ -539,7 +539,7 @@ async def snapshot_target(run: Run, label: str, tgt, tgt_peer) -> dict:
     data = {"label": label, "time": now_iso(), "count": len(recs), "records": recs}
     path = run.target_before if label == "before" else run.target_after
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-    return {"label": label, "count": len(recs)}
+    return {"label": label, "count": len(recs), "records": recs}
 
 
 async def check_target_peer(tgt, tgt_peer) -> str:

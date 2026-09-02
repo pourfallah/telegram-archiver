@@ -146,8 +146,15 @@ def _reply(a: dict, b: dict, mapping: dict[int, int]) -> dict[str, Any]:
 
 def _forward(a: dict, b: dict) -> dict[str, Any]:
     af, bf = a.get("forward"), b.get("forward")
-    if (af is None and bf is None):
+    if af is None and bf is None:
         return {"class": "NONE"}
+    if af is None:
+        # Source was not a forward. An imported message always carries a
+        # Telegram fwd_from header as the import carrier (imported=true),
+        # so this is the expected/normal case, not a failure.
+        return {"class": "EXACT", "detail": "source not forwarded; "
+                "target fwd_from is the import carrier",
+                "target_imported": bool((bf or {}).get("imported"))}
     if bf is None:
         return {"class": "FAILED", "detail": "source forwarded, target not"}
     fwd_same = (af.get("from_name") == bf.get("from_name")) and \

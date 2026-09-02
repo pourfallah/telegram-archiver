@@ -110,6 +110,25 @@ def map_source_to_target(source: list[dict], target: list[dict],
     return mappings
 
 
+def _source_userid(s: dict) -> int | None:
+    fi = s.get("from_id") or {}
+    return fi.get("user_id")
+
+
+def _fwd_minute(t: dict) -> float | None:
+    """Rounded-to-minute UTC minute of an imported target's fwd_from.date."""
+    fwd = t.get("forward") or {}
+    fd = fwd.get("date")
+    if fd is None:
+        return None
+    if isinstance(fd, (int, float)):
+        return round(float(fd) / 60.0)
+    try:
+        return round(datetime.fromisoformat(str(fd).replace("Z", "+00:00")).timestamp() / 60.0)
+    except ValueError:
+        return None
+
+
 def _match_source(s, candidates, used, idx, tol):
     # 1) exact media hash / document id
     for keyname, value_name in (("sha256", "by_sha"), ("media_id", "by_doc")):
@@ -120,7 +139,35 @@ def _match_source(s, candidates, used, idx, tol):
                     continue
                 return (t["target_message_id"], "EXACT_MEDIA",
                         f"matching {keyname} {k[:12]}", {"key": keyname, "value": k})
-    # 2) text + date + presence-of-media (sender id differs after import)
+    # 2) imported-message anchor: the target's fwd_from.date (rounded to the
+    #    minute) must match the source UTC minute. Telegram stamps every imported
+    #    message with fwd_from.date = the encoded historical instant, so this is
+    #    the authoritative link and far more reliable than text (which the import
+    #    may reformat) or fuzzy position.
+    sd_m = round(_date_secs(s) / 60.0) if _date_secs(s) is not None else None
+    src_uid = _source_userid(s)
+    if sd_m is not None:
+        best = None
+        for t in candidates:
+            if t["target_message_id"] in used:
+                continue
+            tm = _fwd_minute(t)
+            if tm is None:
+                continue
+            if abs(tm - sd_m) > 3 and abs(tm - (sd_m + 60)) > 3:
+                continue
+            if src_uid is not None:
+                want = f"user_{src_uid}"
+                if (t.get("forward") or {}).get("from_name") != want:
+                    continue
+            best = t
+            break
+        if best is not None:
+            delta = (tm - sd_m) * 60
+            return (best["target_message_id"], "IMPORTED_FWD_DATE",
+                    "fwd_from.date matches source minute",
+                    {"delta_secs": round(delta, 1)})
+    # 3) text + date + presence-of-media (sender id differs after import)
     text = _norm_text(s.get("text"))
     if text:
         for t in candidates:

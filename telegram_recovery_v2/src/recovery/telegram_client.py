@@ -92,6 +92,13 @@ class RecoveryClient:
             raise RuntimeError("client not connected")
         return await self.client(request, *args, **kwargs)
 
+    async def iter_download(self, media, *args, **kwargs):
+        """Stream media bytes from this actor's connected client (async generator)."""
+        if self.client is None:
+            raise RuntimeError("client not connected")
+        async for chunk in self.client.iter_download(media, *args, **kwargs):
+            yield chunk
+
     def describe(self) -> dict:
         """Non-secret identity descriptor (safe to log / report)."""
         me = self._me

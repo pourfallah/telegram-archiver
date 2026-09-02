@@ -21,24 +21,96 @@ from __future__ import annotations
 import json
 import shutil
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from telethon.tl import functions as tg_functions
 
 from .archive import Archive
 from .media import safe_filename
 
+# Canonical human/display timezone for the recovery test (users are in Tehran).
+# Historical DST rules for Asia/Tehran are applied by the IANA tz database.
+TEHRAN = ZoneInfo("Asia/Tehran")
+# Telegram's import-file timestamp format is minute precision (DD/MM/YYYY, HH:MM).
+TEHRAN_FILE_FMT = "%d/%m/%Y, %H:%M"
+
+
+def _to_utc(d: str) -> datetime:
+    dt = datetime.fromisoformat(d.replace("Z", "+00:00"))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def tehran_local_of(d: str) -> datetime:
+    """Return the Asia/Tehran historical local wall-clock of an ISO instant."""
+    return _to_utc(d).astimezone(TEHRAN)
+
+
+def tehran_local_str(d: str) -> str:
+    return tehran_local_of(d).strftime(TEHRAN_FILE_FMT)
+
+
+def tehran_timestamp_checks() -> list[dict[str, Any]]:
+    """Deterministic round-trip checks for the import-file timestamp encoder.
+
+    For each source UTC instant: build the Asia/Tehran historical local
+    wall-clock, encode the `_chat.txt` timestamp, then parse that timestamp
+    back as Asia/Tehran local and confirm the recovered UTC minute equals the
+    source UTC minute (no timezone shift; only Telegram's unavoidable minute
+    precision is lost).
+    """
+    cases = [
+        "2015-12-31T20:35:57+00:00",  # -> 2016-01-01 00:05 +03:30 (source 5307)
+        "2016-08-01T12:00:00+00:00",  # Tehran DST in effect (+04:30)
+        "2016-11-01T12:00:00+00:00",  # after DST ended (+03:30)
+    ]
+    out: list[dict[str, Any]] = []
+    for src in cases:
+        utc = _to_utc(src)
+        local = utc.astimezone(TEHRAN)
+        file_ts = _date_str(src)
+        naive = datetime.strptime(file_ts, TEHRAN_FILE_FMT)
+        intended = naive.replace(tzinfo=TEHRAN).astimezone(timezone.utc)
+        minute_exact = (
+            intended.strftime("%Y-%m-%d %H:%M") == utc.strftime("%Y-%m-%d %H:%M")
+        )
+        out.append(
+            {
+                "source_utc": utc.isoformat(),
+                "tehran_local": local.isoformat(),
+                "offset_hours": (local.utcoffset() or timedelta(0)).total_seconds() / 3600,
+                "file_timestamp": file_ts,
+                "intended_utc": intended.isoformat(),
+                "minute_exact": minute_exact,
+            }
+        )
+    return out
+
+
+def verify_timestamp_encoding() -> bool:
+    """Pre-execution gate: every round-trip check must be minute-exact."""
+    return all(c["minute_exact"] for c in tehran_timestamp_checks())
+
 # ---------------------------------------------------------------------------
 # 1. Import package (generated directly from the canonical archive)
 # ---------------------------------------------------------------------------
 def _date_str(d: str | None) -> str:
+    """Encode an ISO instant as the WhatsApp-format Telegram import timestamp.
+
+    Telegram's import-file parser interprets the naive `DD/MM/YYYY, HH:MM`
+    timestamp as the local wall-clock in Asia/Tehran and stores the matching
+    UTC instant.  So we write the *historical Asia/Tehran local* wall-clock of
+    the source instant (applying the IANA DST rules that applied on that date).
+    Format is minute precision; seconds cannot be represented exactly.
+    """
     if not d:
         return ""
     try:
-        dt = datetime.fromisoformat(d.replace("Z", "+00:00"))
-        return dt.strftime("%d/%m/%Y, %H:%M")
+        return tehran_local_str(d)
     except ValueError:
         return d
 
@@ -76,6 +148,7 @@ def build_import_package(archive: Archive, out_dir: Path,
             "sender": sender,
             "media": [],
         }
+        media_tokens: list[str] = []
         for media in rec.get("media") or []:
             if not media.get("path"):
                 continue
@@ -92,10 +165,18 @@ def build_import_package(archive: Archive, out_dir: Path,
                 shutil.copy2(src, media_out / fname)
                 if sha:
                     copied_sha[sha] = fname
-            lines.append(f"{when} - {sender}: <Attached: {fname}>")
+            media_tokens.append(f"<Attached: {fname}>")
             row["media"].append({"sha256": sha, "file": fname})
         text = (rec.get("text") or "").strip()
-        if text:
+        # WhatsApp import format: a caption stays on the SAME line as the
+        # <Attached:> media token so Telegram imports it as ONE message whose
+        # ``message`` is the caption. A separate text line would detach it.
+        if media_tokens:
+            line = f"{when} - {sender}: {' '.join(media_tokens)}"
+            if text:
+                line += " " + text
+            lines.append(line)
+        elif text:
             lines.append(f"{when} - {sender}: {text}")
         manifest_rows.append(row)
 
