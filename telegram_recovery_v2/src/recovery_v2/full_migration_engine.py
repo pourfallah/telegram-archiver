@@ -152,9 +152,15 @@ async def build_batch(msgs: list, batch_dir: Path, names: dict[int, str]) -> tup
     media: list[dict] = []
     used_fnames: set[str] = set()
     caption_lines: list[str] = []
+    group_when: dict = {}  # grouped_id -> _chat.txt timestamp (same for all album members)
 
     for m in msgs:
         when = _tw(getattr(m, "date", ""))
+        gid = getattr(m, "grouped_id", None)
+        if gid:
+            # ALBUM: force the EXACT same timestamp across every member so Telegram
+            # groups consecutive same-grouped media into one album on import.
+            when = group_when.setdefault(gid, when)
         uid = getattr(getattr(m, "from_id", None), "user_id", None)
         sender = names.get(uid, f"user_{uid}" if uid else "Unknown")
         text = (getattr(m, "message", None) or "").replace("\n", " ").strip()

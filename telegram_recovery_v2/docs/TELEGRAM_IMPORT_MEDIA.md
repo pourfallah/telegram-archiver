@@ -291,3 +291,34 @@ historical `message.date`/`fwd.date` (photo 2015, audio 2026-08-05) while others
 always applied. Needs investigation (likely tied to rapid/concurrent imports or a
 server race). A large `messages.initHistoryImport` flood (~74k s) was hit after
 ~12 imports in ~2 h, blocking further live probing.
+
+## §7.8 Captions / albums / replies — measured limits (2026-09-03)
+
+Tested live (single initHistoryImport each, A<->C->A<->B read-back):
+
+1. **Bare caption line (no `[ts] Sender:` header) BREAKS media binding.** A line
+   `caption text` directly under `<attached: cap.png>` makes the parser stop
+   recognizing the file as a chat: the media marker merges into one TEXT message
+   `<attached: cap.png>\ncaption text` and the photo is LOST (no MessageMediaPhoto).
+   => Every content line MUST be `[DD/MM/YYYY, HH:MM:SS] Sender: ...`. The only
+   conformant caption handling is `[ts] Sender: caption` as a trailing line, which
+   Telegram imports as a SEPARATE text message (there is NO caption-on-media).
+
+2. **Albums do NOT group via shared timestamp.** Two videos with the IDs that the
+   engine forces to the identical `when` imported as two SEPARATE messages
+   (`grouped_id=None`), not an album. Telegram's import parser does not create
+   media groups from same-timestamp consecutive media.
+
+3. **Replies flatten.** Messages carrying `reply_to_id` import as plain text
+   messages with `reply_to=None` — no reply/quote threading is preserved. There is
+   no quote syntax Telegram's import parser renders into a reply.
+
+4. **Why:** the official protocol (`core.telegram.org/api/import`, 5 RPCs) has NO
+   caption/album/reply mechanism; the parser only decodes WhatsApp-format text
+   lines. `inputSingleMedia` (a possible source of the expectation) is defined
+   ONLY for `messages.sendMultiMedia` — the SEND path, which is forbidden here as
+   history recovery. These three behaviors are Telegram Import API limitations.
+
+Implication for `full_migration_engine.py`: keep captions as `[ts] Sender: caption`
+trailing lines (separate text message); keep album members at identical timestamps
+(no-op, no grouping); replies import flat. Do NOT emit bare lines after markers.
