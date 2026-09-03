@@ -225,28 +225,33 @@ async def run(cfg, args) -> int:
         state.data["batch_size"] = args.batch_size
         state.save()
 
-        # ---- 1) lightweight id index (ids only, chronological oldest->newest) ----
-        print("discovering A<->C ids (metadata only)...")
-        ids_newest: list[int] = []
-        offset_id = 0
-        while True:
-            if args.limit and len(ids_newest) >= args.limit:
-                break
-            res = await src.call(f.messages.GetHistoryRequest(
-                peer=src_peer, offset_id=offset_id, offset_date=None, add_offset=0,
-                limit=100, max_id=0, min_id=0, hash=0))
-            ms = getattr(res, "messages", None) or []
-            if not ms:
-                break
-            ids_newest += [m.id for m in ms]
-            if len(ms) < 100:
-                break
-            offset_id = ms[-1].id
-            if len(ids_newest) % 5000 == 0:
-                print(f"  ... {len(ids_newest)} ids indexed")
-        ids = ids_newest[::-1]  # oldest first
-        if args.limit:
-            ids = ids[:args.limit]
+        # ---- 1) id index, chronological OLDEST->NEWEST (ascending id/date) ----
+        if args.ids:
+            # targeted window: exact ids, oldest-first, ONE batch
+            ids = sorted(int(x) for x in args.ids.split(",") if x.strip())
+            print(f"using --ids window: {len(ids)} messages (oldest-first, single batch)")
+        else:
+            print("discovering A<->C ids (metadata only)...")
+            ids_newest: list[int] = []
+            offset_id = 0
+            while True:
+                if args.limit and len(ids_newest) >= args.limit:
+                    break
+                res = await src.call(f.messages.GetHistoryRequest(
+                    peer=src_peer, offset_id=offset_id, offset_date=None, add_offset=0,
+                    limit=100, max_id=0, min_id=0, hash=0))
+                ms = getattr(res, "messages", None) or []
+                if not ms:
+                    break
+                ids_newest += [m.id for m in ms]
+                if len(ms) < 100:
+                    break
+                offset_id = ms[-1].id
+                if len(ids_newest) % 5000 == 0:
+                    print(f"  ... {len(ids_newest)} ids indexed")
+            ids = ids_newest[::-1]  # oldest-first (id ascending = chronological forward)
+            if args.limit:
+                ids = ids[:args.limit]
         total = len(ids)
         # Resume: continue from the last fully-imported batch. (Delete the state
         # file to start over from message 0.)
@@ -337,7 +342,10 @@ def main(argv=None) -> int:
     ap.add_argument("--source-peer", required=True, help="A<->C contact (read-only)")
     ap.add_argument("--batch-size", type=int, default=5000)
     ap.add_argument("--delay", type=int, default=12, help="seconds between batches")
-    ap.add_argument("--limit", type=int, default=0, help="max messages to migrate (0=all)")
+    ap.add_argument("--limit", type=int, default=0, help="max messages (0=all)")
+    ap.add_argument("--ids", default="",
+                    help="comma-separated exact src ids to migrate as ONE batch (oldest-first); "
+                         "skips full discovery")
     ap.add_argument("--dry-run", action="store_true", help="build/verify locally, no A<->B mutation")
     ap.add_argument("--state", default=None)
     args = ap.parse_args(argv)
