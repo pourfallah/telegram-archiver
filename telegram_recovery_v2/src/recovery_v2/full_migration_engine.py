@@ -45,10 +45,18 @@ STATE_PATH = Path("test_runs") / "migration_state.json"
 # formatting / media helpers (the PROVEN recipe)
 # ---------------------------------------------------------------------------
 def _tw(dt) -> str:
+    """Encode in the import parser's FIXED +03:30 frame.
+
+    The server decodes _chat.txt timestamps at a fixed +03:30 (it ignores Iran's
+    historical DST), so writing the DST-aware Asia/Tehran wall-clock made
+    DST-period instants land +1h late (user-observed date corruption). Writing
+    instant + 03:30 yields target.message.date == source date for EVERY date;
+    standard-offset era dates are unchanged (wall clock == instant + 03:30).
+    """
     d = datetime.fromisoformat(str(dt).replace("Z", "+00:00"))
     if d.tzinfo is None:
         d = d.replace(tzinfo=timezone.utc)
-    return d.astimezone(TEHRAN).strftime("[%d/%m/%Y, %H:%M:%S]")
+    return (d + timedelta(hours=3, minutes=30)).strftime("[%d/%m/%Y, %H:%M:%S]")
 
 
 def _ext_from_mime(mime: str | None) -> str:
@@ -161,7 +169,8 @@ def _du_kb(p) -> int:
     return sum(f.stat().st_size for f in Path(p).rglob("*") if f.is_file()) // 1024
 
 
-async def build_batch(msgs: list, batch_dir: Path, names: dict[int, str]) -> tuple[list, list]:
+async def build_batch(msgs: list, batch_dir: Path, names: dict[int, str],
+                      a_id: int, c_id: int) -> tuple[list, list]:
     """From full source messages -> (_chat.txt lines, staged media file records).
     Returns (lines, media_records) where media_records = [{file_name,path,media_input_builder}]."""
     lines: list[str] = []
@@ -178,6 +187,10 @@ async def build_batch(msgs: list, batch_dir: Path, names: dict[int, str]) -> tup
             # groups consecutive same-grouped media into one album on import.
             when = group_when.setdefault(gid, when)
         uid = getattr(getattr(m, "from_id", None), "user_id", None)
+        if uid is None:
+            # id-fetched messages may omit from_id; the out flag disambiguates
+            # the private-chat sender (A=src account, else C).
+            uid = a_id if getattr(m, "out", False) else c_id
         sender = names.get(uid, f"user_{uid}" if uid else "Unknown")
         text = (getattr(m, "message", None) or "").replace("\n", " ").strip()
         med = getattr(m, "media", None)
@@ -252,6 +265,68 @@ async def import_batch(client, peer, batch_dir: Path, chat_text: str,
     return out
 
 
+async def replay_reactions(src, tgt, tgt_peer, msgs: list, src_peer) -> dict:
+    """Re-apply source MessageReactions onto the just-imported target messages.
+
+    The import 5-RPC flow has NO reaction parameter (primary-source fact). The
+    only mechanism is a SUBSEQUENT messages.sendReaction on the imported target
+    message, issued from a target participant's own session, after the batch
+    commits. Source reactions are fetched with messages.getMessagesReactions
+    (GetMessagesRequest-by-id does not populate Message.reactions). Best effort:
+    the source message's distinct emoji set is re-applied via the importer's (B)
+    session; exact per-user attribution is not preserved (C's reactions cannot
+    map to a participant of A<->B).
+    """
+    from telethon.tl import functions as f
+    from telethon.tl import types as tl
+    out: dict = {"reacted_msgs": 0, "emojis": 0}
+    try:
+        ids = [getattr(m, "id", 0) for m in msgs if getattr(m, "id", None)]
+        emo_by_id: dict[int, list[str]] = {}
+        for i in range(0, len(ids), 100):
+            chunk = ids[i:i + 100]
+            rr = await _with_flood_retry(lambda: src.call(
+                f.messages.GetMessagesReactionsRequest(peer=src_peer, id=chunk)), "reactSrc")
+            # getMessagesReactions returns Updates; reactions ride in
+            # UpdateMessageReactions entries.
+            for u in (getattr(rr, "updates", None) or []):
+                if type(u).__name__ != "UpdateMessageReactions":
+                    continue
+                mid = getattr(u, "msg_id", None)
+                if not mid:
+                    continue
+                emos: list[str] = []
+                for rc in (getattr(getattr(u, "reactions", None), "results", None) or []):
+                    emo = getattr(getattr(rc, "reaction", None), "emoticon", None)
+                    if emo and emo not in emos:
+                        emos.append(emo)
+                if emos:
+                    emo_by_id[mid] = emos
+        if not emo_by_id:
+            out["no_source_reactions"] = True
+            return out
+        res = await _with_flood_retry(lambda: tgt.call(f.messages.GetHistoryRequest(
+            peer=tgt_peer, offset_id=0, offset_date=None, add_offset=0,
+            limit=len(msgs), max_id=0, min_id=0, hash=0)), "reactMap")
+        t_msgs = [m for m in (getattr(res, "messages", None) or [])
+                  if getattr(getattr(m, "fwd_from", None), "imported", False)]
+        t_msgs.sort(key=lambda m: getattr(m, "date", datetime.min))
+        ordered = sorted(msgs, key=lambda m: getattr(m, "date", datetime.min))
+        for sm, tm in zip(ordered, t_msgs):
+            emos = emo_by_id.get(getattr(sm, "id", None))
+            if not emos:
+                continue
+            await _with_flood_retry(lambda: tgt.call(f.messages.SendReactionRequest(
+                peer=tgt_peer, msg_id=tm.id,
+                reaction=[tl.ReactionEmoji(emoticon=e) for e in emos],
+                add_to_recent=False)), "react")
+            out["reacted_msgs"] += 1
+            out["emojis"] += len(emos)
+    except Exception as e:
+        out["error"] = f"{type(e).__name__}: {e}"
+    return out
+
+
 # ---------------------------------------------------------------------------
 # engine driver
 # ---------------------------------------------------------------------------
@@ -312,7 +387,26 @@ async def run(cfg, args) -> int:
         # ---- 2) process batches in order ----------------------------------------
         start = resume
         processed = resume
+        me_a = await src.client.get_me()
+        c_id = getattr(src_peer, "user_id", None)
+        # Sender names MUST be the TARGET chat's participant names. Two-sided
+        # mapping: A's messages use A's name (as B sees it); C's messages use
+        # B's name, so the migrated A<->C history reads as a two-sided A<->B
+        # conversation. The parser matches line senders against target
+        # participants; any other name is dropped and mis-attributed (measured:
+        # 345 msgs landed with fwd.from_id = importing account B).
         names: dict[int, str] = {}
+        try:
+            me_b = await tgt.client.get_me()
+            b_name = me_b.first_name or me_b.username or f"user_{me_b.id}"
+            names[me_b.id] = b_name
+            if c_id:
+                names[c_id] = b_name  # C (source other-side) surfaces as B's side
+            a_ent = await tgt.client.get_entity(tgt_peer)
+            a_id = getattr(a_ent, "user_id", None) or getattr(a_ent, "id", None)
+            names[a_id] = a_ent.first_name or a_ent.username or f"user_{a_id}"
+        except Exception as e:
+            print(f"  WARN participant name resolution failed: {e}")
         while start < total:
             batch_ids = ids[start:start + args.batch_size]
             batch_dir = TMP_ROOT / f"batch_{start}_{start + len(batch_ids)}"
@@ -325,13 +419,10 @@ async def run(cfg, args) -> int:
                     lambda: src.call(f.messages.GetMessagesRequest(id=chunk)), "getMessages")
                 got = getattr(res, "messages", None) or []
                 msgs += [m for m in got if getattr(m, "id", None) in set(batch_ids)]
-                if getattr(res, "users", None):
-                    for u in res.users:
-                        names.setdefault(u.id, u.first_name or u.username or f"user_{u.id}")
             msgs.sort(key=lambda m: getattr(m, "date", datetime.min))
 
             # build + stage media bytes
-            lines, media = await build_batch(msgs, batch_dir, names)
+            lines, media = await build_batch(msgs, batch_dir, names, me_a.id, c_id)
             for rec in media:
                 src_m = next((m for m in msgs if getattr(m, "id", None) == rec["source_id"]), None)
                 dl = None
@@ -376,6 +467,9 @@ async def run(cfg, args) -> int:
             shutil.rmtree(batch_dir, ignore_errors=True)
             print(f"  -> committed {len(batch_ids)}; total processed {processed}/{total} "
                   f"| rss={_mem_kb()}KiB tmp={_du_kb(TMP_ROOT)}KiB", flush=True)
+            if not args.no_reactions:
+                rx = await replay_reactions(src, tgt, tgt_peer, msgs, src_peer)
+                print(f"  reactions: {json.dumps(rx, ensure_ascii=False)}", flush=True)
 
             start += len(batch_ids)
             if args.delay:
@@ -398,6 +492,8 @@ def main(argv=None) -> int:
                     help="comma-separated exact src ids to migrate as ONE batch (oldest-first); "
                          "skips full discovery")
     ap.add_argument("--dry-run", action="store_true", help="build/verify locally, no A<->B mutation")
+    ap.add_argument("--no-reactions", action="store_true",
+                    help="skip post-import reaction replay (sendReaction)")
     ap.add_argument("--state", default=None)
     args = ap.parse_args(argv)
 
