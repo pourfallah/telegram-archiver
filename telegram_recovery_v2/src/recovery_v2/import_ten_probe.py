@@ -87,8 +87,10 @@ async def main() -> int:
     from recovery_v2.login_accounts import AccountStore
     accounts = AccountStore().list()
     a_phone = next(x.get("phone") for x in accounts if (x.get("phone") or "").startswith("+98"))
-    b_session = next(x["session_string"] for x in accounts
-                     if not (x.get("phone") or "").startswith("+98"))
+    # The DB stores session_path (a file), not the string; read the StringSession
+    # from that 0600 file (mirrors how the other probe/verify scripts connect B).
+    b_acc = next(x for x in accounts if not (x.get("phone") or "").startswith("+98"))
+    b_session = Path(b_acc.get("session_path")).read_text().strip()
 
     tmp = Path(tempfile.mkdtemp(prefix="mprobe_"))
     chat_path = tmp / "sample_chat.txt"
