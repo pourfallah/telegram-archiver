@@ -59,6 +59,12 @@ def _tw(dt) -> str:
     return (d + timedelta(hours=3, minutes=30)).strftime("[%d/%m/%Y, %H:%M:%S]")
 
 
+def _cutoff_dt(s: str):
+    """Exclusive cutoff instant (UTC midnight of the given YYYY-MM-DD)."""
+    d = datetime.strptime(s, "%Y-%m-%d")
+    return d.replace(tzinfo=timezone.utc)
+
+
 def _ext_from_mime(mime: str | None) -> str:
     if not mime:
         return "bin"
@@ -347,36 +353,62 @@ async def run(cfg, args) -> int:
         state.save()
 
         # ---- 1) id index, chronological OLDEST->NEWEST (ascending id/date) ----
+        # DATE CUTOFF: only messages dated BEFORE cutoff are imported; the index
+        # is filtered at discovery AND a defensive filter runs at fetch time.
+        cutoff = _cutoff_dt(args.cutoff_date)
+        print(f"date cutoff: importing only messages < {cutoff.isoformat()}")
         if args.ids:
             # targeted window: exact ids, oldest-first, ONE batch
             ids = sorted(int(x) for x in args.ids.split(",") if x.strip())
             print(f"using --ids window: {len(ids)} messages (oldest-first, single batch)")
         else:
-            print("discovering A<->C ids (metadata only)...")
-            ids_newest: list[int] = []
-            offset_id = 0
-            while True:
-                if args.limit and len(ids_newest) >= args.limit:
-                    break
-                res = await _with_flood_retry(
-                    lambda: src.call(f.messages.GetHistoryRequest(
-                        peer=src_peer, offset_id=offset_id, offset_date=None, add_offset=0,
-                        limit=100, max_id=0, min_id=0, hash=0)), "discover")
-                ms = getattr(res, "messages", None) or []
-                if not ms:
-                    break
-                ids_newest += [m.id for m in ms]
-                if len(ms) < 100:
-                    break
-                offset_id = ms[-1].id
-                if len(ids_newest) % 5000 == 0:
-                    print(f"  ... {len(ids_newest)} ids indexed")
-            ids = ids_newest[::-1]  # oldest-first (id ascending = chronological forward)
-            if args.limit:
+            # STRICT OLDEST-FIRST: full discovery down to the absolute oldest
+            # message; the id index is cached to disk so resume runs don't
+            # re-scan the whole history.
+            ids_file = TMP_ROOT.parent / "migration_ids.txt"
+            cached: list[int] = []
+            if ids_file.exists():
+                try:
+                    cached = [int(x) for x in ids_file.read_text().split()]
+                except Exception:
+                    cached = []
+                print(f"id index cache: {len(cached)} ids (skip full re-scan)")
+            if not cached:
+                print("discovering A<->C ids (metadata only)...")
+                ids_newest: list[int] = []
+                offset_id = 0
+                while True:
+                    res = await _with_flood_retry(
+                        lambda: src.call(f.messages.GetHistoryRequest(
+                            peer=src_peer, offset_id=offset_id, offset_date=None, add_offset=0,
+                            limit=100, max_id=0, min_id=0, hash=0)), "discover")
+                    ms = getattr(res, "messages", None) or []
+                    if not ms:
+                        break
+                    ids_newest += [m.id for m in ms
+                                   if getattr(m, "date", None) is not None and m.date < cutoff]
+                    if len(ms) < 100:
+                        break
+                    offset_id = ms[-1].id
+                    if len(ids_newest) % 5000 == 0:
+                        print(f"  ... {len(ids_newest)} ids indexed (pre-cutoff)")
+                cached = list(reversed(ids_newest))  # oldest-first persisted
+                try:
+                    ids_file.write_text("\n".join(map(str, cached)))
+                    print(f"id index cached to {ids_file}")
+                except Exception as e:
+                    print(f"  WARN could not cache id index: {e}")
+            ids = cached
+            # absolute OLDEST slice for test-mode / --limit
+            if args.test_mode:
+                ids = ids[:100]
+            elif args.limit:
                 ids = ids[:args.limit]
         total = len(ids)
-        # Resume: continue from the last fully-imported batch. (Delete the state
-        # file to start over from message 0.)
+        # Robust cursor: resume from the last FULLY-imported batch index. The
+        # index is deterministic (cached, cutoff-filtered) so resuming at index N
+        # re-imports exactly [N..) — no skip, no duplicate. The cursor itself is
+        # only advanced in section 2 AFTER startHistoryImport + media verify.
         resume = 0 if args.ids else state.data.get("processed_count", 0)
         if resume > total:
             resume = 0
@@ -419,6 +451,9 @@ async def run(cfg, args) -> int:
                     lambda: src.call(f.messages.GetMessagesRequest(id=chunk)), "getMessages")
                 got = getattr(res, "messages", None) or []
                 msgs += [m for m in got if getattr(m, "id", None) in set(batch_ids)]
+            # defensive DATE CUTOFF + fetch ONLY this batch's bodies (never future)
+            msgs = [m for m in msgs
+                    if getattr(m, "date", None) is not None and m.date < cutoff]
             msgs.sort(key=lambda m: getattr(m, "date", datetime.min))
 
             # build + stage media bytes
@@ -458,11 +493,29 @@ async def run(cfg, args) -> int:
                 state.save()
                 raise
 
-            # success -> advance + cleanup
+            # ROBUST CURSOR GATE: advance ONLY if startHistoryImport returned true
+            # AND every uploaded media echoed a real MessageMedia (the media
+            # promise is 100% verified). Otherwise abort WITHOUT advancing so a
+            # resume re-runs this exact batch (no skip, no duplicate).
+            committed_ok = bool(trace.get("E_startHistoryImport"))
+            if committed_ok and media:
+                bad = [u.get("file_name") for u in trace.get("D_uploads", [])
+                       if not str(u.get("returned", "")).startswith("MessageMedia")]
+                if bad:
+                    committed_ok = False
+            if not committed_ok:
+                print("  IMPORT VERIFY FAILED: startHistoryImport/MessageMedia echo not "
+                      "confirmed — cursor NOT advanced (resume will retry this batch)")
+                shutil.rmtree(batch_dir, ignore_errors=True)
+                state.save()
+                return 1
+
+            # success -> advance + cleanup (purge BEFORE next fetch; cursor saved first)
             processed += len(batch_ids)
             state.data["processed_count"] = processed
             state.data.setdefault("batches", []).append(
-                {"start": start, "end": start + len(batch_ids), "count": len(batch_ids)})
+                {"start": start, "end": start + len(batch_ids), "count": len(batch_ids),
+                 "first_id": batch_ids[0], "last_id": batch_ids[-1]})
             state.save()
             shutil.rmtree(batch_dir, ignore_errors=True)
             print(f"  -> committed {len(batch_ids)}; total processed {processed}/{total} "
@@ -472,6 +525,9 @@ async def run(cfg, args) -> int:
                 print(f"  reactions: {json.dumps(rx, ensure_ascii=False)}", flush=True)
 
             start += len(batch_ids)
+            if args.test_mode:
+                print("  test-mode: committed oldest-100 batch; STOPPING for visual verification")
+                break
             if args.delay:
                 await asyncio.sleep(args.delay)
 
@@ -485,7 +541,12 @@ async def run(cfg, args) -> int:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--source-peer", required=True, help="A<->C contact (read-only)")
-    ap.add_argument("--batch-size", type=int, default=5000)
+    ap.add_argument("--batch-size", type=int, default=1000,
+                    help="messages per batch (production: 1000)")
+    ap.add_argument("--test-mode", action="store_true",
+                    help="migrate ONLY the absolute oldest 100 messages in one batch, then STOP")
+    ap.add_argument("--cutoff-date", default="2026-08-19",
+                    help="exclusive cutoff YYYY-MM-DD: only messages dated BEFORE this (UTC) import")
     ap.add_argument("--delay", type=int, default=12, help="seconds between batches")
     ap.add_argument("--limit", type=int, default=0, help="max messages (0=all)")
     ap.add_argument("--ids", default="",
