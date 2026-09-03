@@ -98,6 +98,30 @@ def _map_attrs(doc_attrs) -> list:
 # ---------------------------------------------------------------------------
 # migration state (resumability)
 # ---------------------------------------------------------------------------
+async def _with_flood_retry(factory, label: str, max_retries: int = 10,
+                           max_wait: int = 3600):
+    """Call an RPC factory, sleeping out FloodWait (+2s buffer) and retrying.
+
+    Safe for history import: each retry runs import_batch fresh (a new
+    initHistoryImport yields a new import_id; nothing is committed until
+    startHistoryImport, so a flooded batch never leaves partial state).
+    """
+    from telethon.errors import FloodWaitError
+    attempt = 0
+    while True:
+        try:
+            return await factory()
+        except FloodWaitError as e:
+            attempt += 1
+            secs = int(getattr(e, "seconds", 30))
+            sleep = min(secs, max_wait) + 2
+            print(f"  [{label}] FloodWaitError {secs}s; sleeping {sleep}s then retrying "
+                  f"(attempt {attempt}/{max_retries})", flush=True)
+            if attempt >= max_retries:
+                raise
+            await asyncio.sleep(sleep)
+
+
 class State:
     def __init__(self, path: Path):
         self.path = path
@@ -237,9 +261,10 @@ async def run(cfg, args) -> int:
             while True:
                 if args.limit and len(ids_newest) >= args.limit:
                     break
-                res = await src.call(f.messages.GetHistoryRequest(
-                    peer=src_peer, offset_id=offset_id, offset_date=None, add_offset=0,
-                    limit=100, max_id=0, min_id=0, hash=0))
+                res = await _with_flood_retry(
+                    lambda: src.call(f.messages.GetHistoryRequest(
+                        peer=src_peer, offset_id=offset_id, offset_date=None, add_offset=0,
+                        limit=100, max_id=0, min_id=0, hash=0)), "discover")
                 ms = getattr(res, "messages", None) or []
                 if not ms:
                     break
@@ -255,7 +280,7 @@ async def run(cfg, args) -> int:
         total = len(ids)
         # Resume: continue from the last fully-imported batch. (Delete the state
         # file to start over from message 0.)
-        resume = state.data.get("processed_count", 0)
+        resume = 0 if args.ids else state.data.get("processed_count", 0)
         if resume > total:
             resume = 0
         state.data["total"] = total
@@ -274,7 +299,8 @@ async def run(cfg, args) -> int:
             msgs: list = []
             for i in range(0, len(batch_ids), 90):
                 chunk = batch_ids[i:i + 90]
-                res = await src.call(f.messages.GetMessagesRequest(id=chunk))
+                res = await _with_flood_retry(
+                    lambda: src.call(f.messages.GetMessagesRequest(id=chunk)), "getMessages")
                 got = getattr(res, "messages", None) or []
                 msgs += [m for m in got if getattr(m, "id", None) in set(batch_ids)]
                 if getattr(res, "users", None):
@@ -309,9 +335,10 @@ async def run(cfg, args) -> int:
 
             # import (single session, one init per batch)
             try:
-                trace = await import_batch(tgt, tgt_peer, batch_dir, chat_text, media)
+                trace = await _with_flood_retry(
+                    lambda: import_batch(tgt, tgt_peer, batch_dir, chat_text, media), "import")
                 print("  import:", json.dumps(trace, ensure_ascii=False)[:200])
-            except Exception as e:  # includes FloodWaitError
+            except Exception as e:
                 print(f"  IMPORT FAILED: {type(e).__name__}: {e}")
                 shutil.rmtree(batch_dir, ignore_errors=True)
                 state.save()
