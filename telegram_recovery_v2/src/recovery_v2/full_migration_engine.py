@@ -174,20 +174,20 @@ async def build_batch(msgs: list, batch_dir: Path, names: dict[int, str]) -> tup
 
 async def import_batch(client, peer, batch_dir: Path, chat_text: str,
                        media: list[dict]) -> dict:
-    """Single-session import of one batch via Account B. Returns step trace."""
+    """Single-session import of one batch via Account B (RecoveryClient)."""
     from telethon.tl import functions as f
     from telethon.tl import types as tl
     out = {}
-    chat_up = await client.upload_file(chat_text.encode("utf-8"), file_name="_chat.txt")
+    chat_up = await client.client.upload_file(chat_text.encode("utf-8"), file_name="_chat.txt")
     out["A_upload_chat"] = type(chat_up).__name__
-    chk = await client(f.messages.CheckHistoryImportRequest(import_head=chat_text[:4000]))
+    chk = await client.call(f.messages.CheckHistoryImportRequest(import_head=chat_text[:4000]))
     out["B_checkHistoryImport"] = {"pm": bool(getattr(chk, "pm", False))}
-    init = await client(f.messages.InitHistoryImportRequest(
+    init = await client.call(f.messages.InitHistoryImportRequest(
         peer=peer, file=chat_up, media_count=len(media)))
     out["C_initHistoryImport"] = int(init.id)
     for rec in media:
-        path = batch_dir / rec["file_name"]
-        up = await client.upload_file(str(path), file_name=rec["file_name"])
+        up = await client.client.upload_file(str(batch_dir / rec["file_name"]),
+                                             file_name=rec["file_name"])
         if rec["is_photo"]:
             media_input = tl.InputMediaUploadedPhoto(file=up)
         else:
@@ -196,12 +196,12 @@ async def import_batch(client, peer, batch_dir: Path, chat_text: str,
                 attrs = [tl.DocumentAttributeFilename(rec["file_name"])] + attrs
             media_input = tl.InputMediaUploadedDocument(
                 file=up, mime_type=rec.get("mime") or "application/octet-stream", attributes=attrs)
-        res = await client(f.messages.UploadImportedMediaRequest(
+        res = await client.call(f.messages.UploadImportedMediaRequest(
             peer=peer, import_id=out["C_initHistoryImport"],
             file_name=rec["file_name"], media=media_input))
         out.setdefault("D_uploads", []).append(
             {"file_name": rec["file_name"], "returned": type(res).__name__})
-    out["E_startHistoryImport"] = bool(await client(
+    out["E_startHistoryImport"] = bool(await client.call(
         f.messages.StartHistoryImportRequest(peer=peer, import_id=out["C_initHistoryImport"])))
     return out
 
