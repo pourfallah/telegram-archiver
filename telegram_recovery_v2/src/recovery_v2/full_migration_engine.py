@@ -145,6 +145,22 @@ class State:
 # ---------------------------------------------------------------------------
 # per-batch build + import
 # ---------------------------------------------------------------------------
+def _mem_kb() -> int:
+    """Resident set size in KiB (Linux /proc)."""
+    try:
+        with open("/proc/self/statm") as fh:
+            return int(fh.read().split()[1]) * (os.sysconf("SC_PAGE_SIZE") // 1024)
+    except Exception:
+        return -1
+
+
+def _du_kb(p) -> int:
+    """Total size of a tree in KiB."""
+    if not Path(p).exists():
+        return 0
+    return sum(f.stat().st_size for f in Path(p).rglob("*") if f.is_file()) // 1024
+
+
 async def build_batch(msgs: list, batch_dir: Path, names: dict[int, str]) -> tuple[list, list]:
     """From full source messages -> (_chat.txt lines, staged media file records).
     Returns (lines, media_records) where media_records = [{file_name,path,media_input_builder}]."""
@@ -329,7 +345,8 @@ async def run(cfg, args) -> int:
                     (batch_dir / rec["file_name"]).write_bytes(b)
             chat_text = "\n".join(lines) + "\n"
 
-            print(f"[batch {start}:{start + len(batch_ids)}] lines={len(lines)} media={len(media)}", flush=True)
+            print(f"[batch {start}:{start + len(batch_ids)}] lines={len(lines)} media={len(media)} "
+                  f"| rss={_mem_kb()}KiB tmp={_du_kb(TMP_ROOT)}KiB", flush=True)
 
             if args.dry_run:
                 # local-only validation, no B mutation
@@ -357,7 +374,8 @@ async def run(cfg, args) -> int:
                 {"start": start, "end": start + len(batch_ids), "count": len(batch_ids)})
             state.save()
             shutil.rmtree(batch_dir, ignore_errors=True)
-            print(f"  -> committed {len(batch_ids)}; total processed {processed}/{total}", flush=True)
+            print(f"  -> committed {len(batch_ids)}; total processed {processed}/{total} "
+                  f"| rss={_mem_kb()}KiB tmp={_du_kb(TMP_ROOT)}KiB", flush=True)
 
             start += len(batch_ids)
             if args.delay:
